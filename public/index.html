@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LabReview — Tiền kiểm kết quả xét nghiệm (giả lập)</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Bỏ qua tới nội dung</a>
+  <div class="shell">
+    <aside class="sidebar" id="sidebar" aria-label="Điều hướng chính">
+      <div class="brand">
+        <span class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M7.5 15h9"/></svg>
+        </span>
+        <div class="brand-txt"><strong>LabReview</strong><small>Tiền kiểm trước ký trả</small></div>
+        <button class="collapse-btn" id="collapseBtn" type="button" aria-label="Thu gọn thanh bên" aria-expanded="true" title="Thu gọn thanh bên">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+        </button>
+      </div>
+      <nav class="nav" role="tablist" aria-label="Chức năng">
+        <button role="tab" data-view="worklist" aria-selected="true" title="Hàng đợi duyệt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><span>Hàng đợi duyệt</span><em id="navCount" class="count"></em></button>
+        <button role="tab" data-view="try" title="Nhập thử kết quả"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg><span>Nhập thử kết quả</span></button>
+        <button role="tab" data-view="eval" title="Đánh giá mô hình"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Đánh giá mô hình</span></button>
+        <button role="tab" data-view="feedback" title="Phản hồi"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/></svg><span>Phản hồi</span></button>
+        <button role="tab" data-view="audit" title="Nhật ký"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>Nhật ký</span></button>
+        <button role="tab" data-view="rules" title="Rule & cấu hình"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6Z"/><path d="m9 12 2 2 4-4"/></svg><span>Rule &amp; cấu hình</span></button>
+      </nav>
+      <section class="side-settings" aria-label="Cài đặt demo">
+        <h2>Cài đặt</h2>
+        <label>Chế độ triển khai
+          <select id="mode">
+            <option value="SHADOW">Chạy ngầm (chỉ đề xuất)</option>
+            <option value="SIMULATED_AUTOSIGN">Tự ký mô phỏng</option>
+          </select>
+        </label>
+        <label>Ngưỡng
+          <select id="personalMode">
+            <option value="OFF">Chung (mặc định)</option>
+            <option value="TIGHTEN">Cá nhân: chỉ siết</option>
+            <option value="ADAPT">Cá nhân: siết + nới</option>
+          </select>
+        </label>
+        <label class="toggle"><input type="checkbox" id="modelEnabled"><span>Mô hình phát hiện lỗi (cục bộ)</span></label>
+        <label class="toggle"><input type="checkbox" id="showTruth"><span>Hiện nhãn giả lập</span></label>
+      </section>
+      <p class="side-llm" id="llmStatus"></p>
+      <p class="side-note"><strong>Dữ liệu giả lập.</strong> Không kết nối LIS, không ký thật. Ngưỡng là minh họa, chưa được khoa phê duyệt.</p>
+    </aside>
+    <div class="content">
+      <header class="topbar">
+        <button class="icon-btn menu" id="menuBtn" type="button" aria-label="Mở menu" aria-controls="sidebar" aria-expanded="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+        </button>
+        <div class="page-title"><h1 id="pageTitle">Hàng đợi duyệt</h1><span id="today" class="muted"></span></div>
+        <span class="sim-pill" title="Không dùng cho người bệnh">Dữ liệu giả lập</span>
+        <button id="batch" class="btn primary" type="button">Chạy lô tự động</button>
+      </header>
+      <main id="main">
+        <section id="view-worklist" class="view">
+          <div id="stats" class="stats" role="group" aria-label="Lọc nhanh theo trạng thái"></div>
+          <div class="split">
+            <div class="list-col">
+              <div class="filters">
+                <input id="fSearch" type="search" placeholder="Tìm mã phiếu, kịch bản…" aria-label="Tìm phiếu">
+                <select id="fDisc" aria-label="Nhóm xét nghiệm"><option value="all">Mọi nhóm</option><option value="CHEM">Hóa sinh</option><option value="HEME">Huyết học</option></select>
+                <label class="toggle small"><input type="checkbox" id="fScenario"><span>Chỉ kịch bản demo</span></label>
+              </div>
+              <div id="list" class="list" aria-label="Danh sách phiếu"></div>
+            </div>
+            <article id="detail" class="detail" aria-live="polite"></article>
+          </div>
+        </section>
+        <section id="view-try" class="view" hidden></section>
+        <section id="view-eval" class="view" hidden></section>
+        <section id="view-feedback" class="view" hidden></section>
+        <section id="view-audit" class="view" hidden></section>
+        <section id="view-rules" class="view" hidden></section>
+      </main>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="tip" class="tip" role="tooltip" hidden></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
