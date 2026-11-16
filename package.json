@@ -1,0 +1,16 @@
+{
+  "name": "vm-autovalidation-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Synthetic laboratory result review prototype; not for clinical use.",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test",
+    "check": "node --check src/data.js && node --check src/rules.js && node --check src/app.js && node --check scripts/serve.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
