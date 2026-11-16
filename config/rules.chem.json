@@ -1,0 +1,310 @@
+{
+  "rulesetId": "CHEM-AV",
+  "version": "chem-demo-1.0.0",
+  "discipline": "CHEM",
+  "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
+  "approvedBy": null,
+  "effectiveFrom": "2026-11-01",
+  "note": "Bộ rule minh họa cho dữ liệu giả lập hóa sinh. Ngưỡng lấy từ config/analytes.json (minh họa). Không dùng cho người bệnh thật.",
+  "rules": [
+    {
+      "code": "CHEM-D01",
+      "type": "required_results",
+      "stage": "DATA",
+      "priority": 10,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "BLOCK",
+      "name": "Đủ kết quả theo chỉ định",
+      "reason": "Mọi chỉ số được chỉ định phải có kết quả số hợp lệ trước khi đánh giá phiếu."
+    },
+    {
+      "code": "CHEM-D02",
+      "type": "unit_check",
+      "stage": "DATA",
+      "priority": 11,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "BLOCK",
+      "name": "Đơn vị đúng cấu hình",
+      "reason": "Đơn vị phải khớp đơn vị chuẩn của xét nghiệm. Không tự quy đổi khi đơn vị lạ hoặc thiếu."
+    },
+    {
+      "code": "CHEM-Q01",
+      "type": "qc_status",
+      "stage": "QC",
+      "priority": 20,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "BLOCK",
+      "name": "QC hiệu lực cho máy – xét nghiệm – thời điểm chạy",
+      "reason": "Lần QC gần nhất trước thời điểm đo của đúng máy và xét nghiệm phải đạt, trong vòng 24 giờ.",
+      "params": {
+        "maxAgeHours": 24
+      }
+    },
+    {
+      "code": "CHEM-F01",
+      "type": "instrument_flags",
+      "stage": "INSTRUMENT",
+      "priority": 30,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "IGNORE",
+      "name": "Cờ máy chặn",
+      "reason": "Cờ kỹ thuật của máy cần xử lý theo SOP trước khi trả.",
+      "params": {
+        "block": [
+          "ABOVE_AMR",
+          "BELOW_AMR",
+          "SAMPLE_SHORT",
+          "CLOT_DETECTED",
+          "REAGENT_EXPIRED",
+          "CALIBRATION_EXPIRED"
+        ],
+        "review": [
+          "SYSTEM_WARNING"
+        ]
+      }
+    },
+    {
+      "code": "CHEM-S01",
+      "type": "hil_index",
+      "stage": "SPECIMEN",
+      "priority": 40,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "BLOCK",
+      "name": "Chỉ số HIL trong giới hạn của từng xét nghiệm",
+      "reason": "Tan máu / đục / vàng vượt giới hạn nhiễu của xét nghiệm thì không trả tự động.",
+      "params": {
+        "limits": {
+          "K": {
+            "H": 90,
+            "L": 1000,
+            "I": 60
+          },
+          "AST": {
+            "H": 100,
+            "L": 1000,
+            "I": 60
+          },
+          "ALT": {
+            "H": 400,
+            "L": 1000,
+            "I": 60
+          },
+          "MG": {
+            "H": 400,
+            "L": 1000,
+            "I": 60
+          },
+          "ALP": {
+            "H": 300,
+            "L": 1000,
+            "I": 60
+          },
+          "CRE": {
+            "H": 800,
+            "L": 1000,
+            "I": 15
+          },
+          "*": {
+            "H": 1000,
+            "L": 1000,
+            "I": 60
+          }
+        }
+      }
+    },
+    {
+      "code": "CHEM-S02",
+      "type": "specimen_stability",
+      "stage": "SPECIMEN",
+      "priority": 41,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "REVIEW",
+      "name": "Thời gian từ lấy mẫu đến khi đo",
+      "reason": "Mẫu để quá lâu có thể làm sai lệch K, GLU. Cần người phụ trách xác nhận.",
+      "params": {
+        "maxHours": {
+          "K": 4,
+          "GLU": 4,
+          "*": 8
+        }
+      }
+    },
+    {
+      "code": "CHEM-L01",
+      "type": "amr",
+      "stage": "LIMIT",
+      "priority": 50,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "IGNORE",
+      "name": "Trong dải đo của phương pháp (AMR)",
+      "reason": "Ngoài dải đo cần pha loãng/chạy lại theo SOP."
+    },
+    {
+      "code": "CHEM-C01",
+      "type": "critical_value",
+      "stage": "CRITICAL",
+      "priority": 51,
+      "onFail": "CRITICAL",
+      "onNotEvaluable": "IGNORE",
+      "name": "Giá trị tới hạn (luồng ưu tiên)",
+      "reason": "Theo chính sách giả lập: giá trị tới hạn không tự ký, chuyển người phụ trách ngay và yêu cầu ghi nhận thông báo lâm sàng. Không đồng nghĩa kết quả sai."
+    },
+    {
+      "code": "CHEM-L02",
+      "type": "av_limits",
+      "stage": "LIMIT",
+      "priority": 52,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Trong giới hạn tự duyệt (rộng hơn khoảng tham chiếu)",
+      "reason": "Ngoài khoảng tham chiếu vẫn có thể tự duyệt nếu trong giới hạn tự duyệt và qua các kiểm tra khác; ngoài giới hạn tự duyệt thì chuyển người xem."
+    },
+    {
+      "code": "CHEM-H01",
+      "type": "delta_check",
+      "stage": "HISTORY",
+      "priority": 60,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "So sánh lịch sử (delta check theo RCV minh họa)",
+      "reason": "Thay đổi so với lần gần nhất vượt RCV minh họa × 1,3 trong 90 ngày → cần đối chiếu bối cảnh/mẫu. Glucose dùng giới hạn rộng hơn (±40%) vì phụ thuộc trạng thái đói/điều trị (minh họa).",
+      "params": {
+        "windowDays": 90,
+        "rcvMultiplier": 1.3,
+        "rcvOverridePct": {
+          "GLU": 40
+        }
+      }
+    },
+    {
+      "code": "CHEM-H02",
+      "type": "history_required_if_abnormal",
+      "stage": "HISTORY",
+      "priority": 61,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Cần lịch sử khi kết quả bất thường",
+      "reason": "Với các chỉ số cấu hình dưới đây, kết quả ngoài khoảng tham chiếu mà không có lịch sử để đối chiếu thì chưa đủ cơ sở tự duyệt.",
+      "params": {
+        "tests": [
+          "K",
+          "NA",
+          "CA"
+        ],
+        "windowDays": 365
+      }
+    },
+    {
+      "code": "CHEM-P01",
+      "type": "personal_interval",
+      "stage": "HISTORY",
+      "priority": 62,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Ngưỡng cá nhân (từ lịch sử của chính người bệnh)",
+      "reason": "Khoảng thường gặp của từng người tính từ kết quả trước của họ (set-point ± biến thiên sinh học). Siết: ra ngoài khoảng cá nhân → người xem. Nới (chế độ ADAPT): kết quả ngoài giới hạn chung nhưng ổn định trong khoảng cá nhân không bị giữ chỉ vì giới hạn chung.",
+      "params": {
+        "lookbackDays": 365,
+        "minPoints": 3,
+        "z": 2.58,
+        "maxSpreadFactor": 2.5,
+        "excludeRecentEventDays": 14,
+        "tests": [
+          "GLU",
+          "URE",
+          "CRE",
+          "NA",
+          "K",
+          "CL",
+          "CA",
+          "MG",
+          "ALB",
+          "ALP",
+          "AST",
+          "ALT"
+        ],
+        "widenTests": [
+          "GLU",
+          "URE",
+          "CRE",
+          "ALB",
+          "ALP",
+          "AST",
+          "ALT"
+        ]
+      }
+    },
+    {
+      "code": "CHEM-X01",
+      "type": "consistency",
+      "stage": "CONSISTENCY",
+      "priority": 70,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Nhất quán K – Ca (dấu hiệu nhiễm EDTA)",
+      "reason": "K cao kèm Ca thấp là kiểu hình gợi ý nhiễm EDTA; cần kiểm tra ống/mẫu. Không kết luận nguyên nhân.",
+      "params": {
+        "check": "edta_pattern",
+        "kAbove": 5.3,
+        "caBelow": 2.05
+      }
+    },
+    {
+      "code": "CHEM-X02",
+      "type": "consistency",
+      "stage": "CONSISTENCY",
+      "priority": 71,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Hiệu Na − Cl",
+      "reason": "Na − Cl thấp bất thường có thể gặp khi mẫu lẫn dịch NaCl 0,9% hoặc điện cực có vấn đề; cần kiểm tra.",
+      "params": {
+        "check": "na_cl_gap",
+        "minGap": 28,
+        "maxGap": 48
+      }
+    },
+    {
+      "code": "CHEM-X03",
+      "type": "consistency",
+      "stage": "CONSISTENCY",
+      "priority": 72,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Glucose rất cao kèm các chỉ số khác giảm đồng loạt",
+      "reason": "Glucose tăng mạnh trong khi các chỉ số khác cùng giảm so với lịch sử có thể gặp khi lẫn dịch glucose; cần đối chiếu.",
+      "params": {
+        "check": "dextrose_pattern",
+        "gluAbove": 20,
+        "minDilutedTests": 3,
+        "dilutionPct": 10
+      }
+    },
+    {
+      "code": "CHEM-M01",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 80,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
+      "reason": "Độ lệch đa chỉ số so với lịch sử bất thường so với biến thiên trong cá thể. Mô hình chỉ có quyền chuyển MANUAL_REVIEW; không vượt qua điều kiện chặn hay tự duyệt thay rule.",
+      "params": {
+        "model": "chem_wbit"
+      }
+    },
+    {
+      "code": "CHEM-M02",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 81,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Mô hình phát hiện nhiễm mẫu (EDTA / dịch truyền) — chỉ được giữ thêm",
+      "reason": "Tổ hợp chỉ số gợi ý nhiễm EDTA hoặc lẫn dịch truyền. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "params": {
+        "model": "chem_contam"
+      }
+    }
+  ]
+}

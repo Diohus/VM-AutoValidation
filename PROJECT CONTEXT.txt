@@ -1,0 +1,160 @@
+Bối cảnh dự án tự động kiểm tra và ký trả kết quả xét nghiệm
+Phiên bản: 1.0 — Ngày tổng hợp: 16/11/2026.
+
+Tóm tắt dự án
+Xây dựng bản demo hệ thống tự động kiểm tra tính hợp lý và điều kiện trả kết quả xét nghiệm sau khi máy gửi kết quả lên LIS, trước bước ký và gửi sang bên tiếp nhận kết quả. Hệ thống dự kiến kết hợp quy tắc chuyên môn với AI để phân luồng: trường hợp đáp ứng đầy đủ điều kiện thì tự động duyệt và tiến tới ký trả; trường hợp có dấu hiệu cần kiểm tra hoặc không đủ dữ liệu thì chuyển người phụ trách xét nghiệm xem xét, kèm lý do.
+
+Mục tiêu dài hạn là tự động học được từ những kết quả đã dự đoán sai hoặc độ chính xác thấp, sau khi bác sĩ đã trực tiếp xác nhận kết quả (gửi ký/không ký) và cho feedback thì tự học từ những kết quả đó để hoàn thiện hơn trong tương lai. Mục tiêu trước mắt là demo có thể dùng thử, thể hiện rõ hệ thống ra quyết định thế nào và bác sĩ can thiệp ở đâu.
+1. Bối cảnh được cung cấp
+    - Địa điểm: khoa xét nghiệm tại bệnh viện Vinmec.
+    - Có các nhóm xét nghiệm như hóa sinh, huyết học, vi sinh....
+    - Phòng xét nghiệm có các máy móc như cobas e402, cobas c303, cobas ise, dxh 690t, ortho vision, cobas pure,...(Một số máy khác tôi không nhớ cụ thể), nói chung sẽ có các máy xét nghiệm huyết học, vi sinh, hóa sinh, xét nghiệm nước tiểu.
+    - Khoa thực hiện QC hằng ngày vào sáng sớm và chỉ chạy mẫu người bệnh khi QC đạt.
+    
+2. Quy trình hiện tại theo mô tả
+    1. Khoa khám bệnh chỉ định xét nghiệm; mẫu máu, nước tiểu hoặc loại mẫu tương ứng được lấy và gửi đến khoa xét nghiệm.
+    2. Nhân viên xử lý mẫu theo quy trình, bao gồm ly tâm khi cần.
+    3. Mẫu được đưa vào thiết bị để phân tích.
+    4. Thiết bị trả kết quả lên LIS của khoa xét nghiệm.
+    5. Nhân viên hoặc bác sĩ phụ trách đọc các chỉ số cùng thông tin người bệnh có sẵn để đánh giá khả năng trả kết quả.
+    6. Bấm “ký” trên hệ thống LIS.
+    7. Kết quả được chuyển sang hệ thống/bộ phận tiếp nhận, có thể được in để bác sĩ khám bệnh sử dụng.
+Điểm tự động hóa nằm giữa bước nhận kết quả ở LIS và bước ký trả. Có thể tự động đọc kết quả và tự động "ký" nếu kết quả hợp lý.
+
+3. Mục tiêu nghiệp vụ và ranh giới
+Yêu cầu
+- Giảm công việc đọc và duyệt lặp lại của người phụ trách xét nghiệm.
+- Đánh giá kết quả trong bối cảnh người bệnh, thay vì chỉ so sánh với khoảng tham chiếu.
+- Nhận diện trường hợp cần kiểm tra lại dữ liệu, mẫu, thiết bị hoặc quá trình phân tích trước khi trả kết quả.
+- Tự động duyệt và ký trả các trường hợp đáp ứng điều kiện được thống nhất.
+- Hiển thị cảnh báo để người phụ trách kiểm tra các trường hợp nghi ngờ hoặc chưa đủ cơ sở.
+- Có khả năng ghi nhận phản hồi chuyên môn để cải thiện hệ thống về sau.
+- Bảo đảm AI không tiếp cận thông tin định danh người bệnh.
+Ranh giới
+Hệ thống hỗ trợ kiểm tra và phát hành kết quả xét nghiệm; không chẩn đoán bệnh, kê thuốc hoặc tự kết luận nguyên nhân sai lệch. Một kết quả đáng ngờ là lý do chuyển kiểm tra, không phải bằng chứng chắc chắn máy hỏng hoặc mẫu lỗi.
+
+4. Các khái niệm AI phải phân biệt
+Khái niệm -	Cách hiểu trong dự án
+Ngoài khoảng tham chiếu -	Một đặc điểm của kết quả; không tự nó chứng minh sai số xét nghiệm
+Có vẻ phù hợp với bối cảnh -	Thông tin hỗ trợ đánh giá; không đủ để bỏ qua các điều kiện kiểm tra khác
+Nghi ngờ chất lượng kết quả -	Có dấu hiệu cần người phụ trách xem xét; chưa xác định chắc nguyên nhân
+Đủ điều kiện tự động duyệt -	Đạt tất cả điều kiện áp dụng đã được khoa xác nhận, với đủ dữ liệu bắt buộc
+Giá trị tới hạn -	Nhóm cần luồng xử lý và thông báo riêng theo chính sách của khoa; không đồng nghĩa kết quả sai
+QC đạt -	Một điều kiện trong quy trình; thiết kế vẫn cần kiểm tra các điều kiện khác theo SOP
+Chưa đủ thông tin -	Trạng thái cần được biểu diễn rõ; không được coi là dữ liệu bình thường hoặc mặc nhiên đạt
+
+
+Làm rõ ví dụ tiểu đường: Ví dụ người bị tiểu đường xét nghiệm máu có lượng đường cao bất thường thì lại là bình thường đối với bản thân người bệnh đó, còn xét nghiệm ra chỉ số đường như người bình thường thì có thể lỗi cần xem xét kỹ hơn. Mục đích của ví dụ là yêu cầu hệ thống xét bối cảnh người bệnh. Không chuyển ví dụ thành quy tắc “có tiểu đường + glucose cao = pass” hoặc “có tiểu đường + glucose bình thường = máy/mẫu lỗi”. Người bệnh tiểu đường có thể có glucose nằm trong mục tiêu điều trị [1]. Nếu dùng ví dụ này trong demo, cần hiển thị bối cảnh giả lập, lịch sử có thời điểm, thông tin điều trị/nhịn ăn nếu có, các cờ và điều kiện kiểm tra liên quan. Không dùng riêng chẩn đoán nền để quyết định ký.
+
+5. Dữ liệu đầu vào cần khảo sát
+Các trường dưới đây là đề xuất khảo sát, không khẳng định LIS đang cung cấp đầy đủ hoặc mọi xét nghiệm đều cần tất cả các trường.
+Nhóm	Dữ liệu có thể cần
+Liên kết nghiệp vụ	Mã người bệnh thay thế, mã lượt, mã chỉ định, mã mẫu đã được bảo vệ
+Chỉ định	Mã xét nghiệm, nhóm xét nghiệm, chỉ số dự kiến phải có, trạng thái đủ kết quả
+Kết quả	Mã chỉ số, giá trị số hoặc định tính, đơn vị, khoảng tham chiếu áp dụng, thời điểm
+Thiết bị	Mã máy, phương pháp, cờ cảnh báo, trạng thái kết quả, lần chạy và kết quả chạy lại nếu có
+Mẫu	Loại mẫu, thời điểm lấy/nhận/xử lý, thông tin chất lượng mẫu và các cờ tương ứng nếu có
+QC	Trạng thái liên quan đúng máy, xét nghiệm và thời điểm; lý do khóa/mở khi có
+Bối cảnh người bệnh	Tuổi hoặc nhóm tuổi, thông tin giới tính cần cho diễn giải, bệnh nền, triệu chứng, thuốc/điều trị và điều kiện lấy mẫu nếu có và được phép
+Lịch sử	Kết quả trước, đơn vị, thời điểm, phương pháp/máy và bối cảnh đủ để so sánh
+Phản hồi	Quyết định của người phụ trách, lý do, kiểm tra bổ sung và kết quả xác minh nếu có
+
+
+Không điền thiếu dữ liệu bằng 0 hoặc chuỗi “bình thường”. Cần phân biệt: không được chỉ định, chưa có kết quả, không thu thập được, không áp dụng và lỗi truyền dữ liệu.
+
+Đề xuất tổ chức dữ liệu: Lưu quan hệ người bệnh thay thế → lượt/chỉ định → mẫu → kết quả; mỗi kết quả là một bản ghi với mã chỉ số, giá trị và metadata. Cách này hỗ trợ mỗi chỉ định có số chỉ số khác nhau, kết quả định tính và nhiều lần chạy. CSV dạng rộng có thể dùng để xuất hoặc huấn luyện từng bài toán cụ thể; chưa chốt một bảng cố định 150 cột làm mô hình dữ liệu chính.
+
+
+6. Luồng quyết định đề xuất
+    1. Tiếp nhận kết quả và bối cảnh được phép sử dụng.
+    2. Chuẩn hóa mã xét nghiệm, đơn vị, kiểu dữ liệu và thời điểm; kiểm tra đủ chỉ số theo chỉ định.
+    3. Áp dụng các điều kiện chặn theo cấu hình được khoa duyệt: dữ liệu bắt buộc, QC, cờ thiết bị, mẫu và các điều kiện liên quan.
+    4. Kiểm tra các quy tắc áp dụng cho xét nghiệm: giới hạn được cấu hình, so sánh lịch sử (delta check), quan hệ giữa chỉ số và bối cảnh được phép sử dụng.
+    5. Nếu có mô hình AI, dùng trong phạm vi đã đánh giá; mô hình không được vượt qua điều kiện chặn bắt buộc.
+    6. Tạo quyết định và lý do; chuyển người phụ trách khi thiếu dữ liệu, gặp tình huống ngoài phạm vi hoặc không đủ cơ sở duyệt.
+    7. Thực hiện ký trả theo chế độ triển khai, quyền hạn và cơ chế tích hợp đã thống nhất.
+    8. Lưu dấu vết và phản hồi.
+    Đây là thiết kế đề xuất. Không có sẵn ngưỡng lâm sàng hoặc bộ rule được phê duyệt trong tài liệu này. CLSI AUTO15 là nguồn định hướng cần tham khảo về thiết kế và thẩm định autoverification [2].
+    9. Trạng thái đầu ra và quy tắc ký
+    Trạng thái đề xuất	Ý nghĩa	Hành động
+    AUTO_APPROVE_ELIGIBLE	Đạt đủ điều kiện tự động duyệt của phiên bản cấu hình áp dụng	Demo mô phỏng ký; triển khai thật chỉ ký khi đã được cho phép
+    MANUAL_REVIEW	Có dấu hiệu cần xem xét hoặc đánh giá còn bất định	Giữ để người phụ trách kiểm tra, hiển thị lý do
+    BLOCKED	Thiếu điều kiện bắt buộc, dữ liệu lỗi hoặc điều kiện chặn đang hiệu lực	Không ký tự động; nêu điều kiện cần xử lý
+
+
+    Giá trị tới hạn nên có cờ/luồng ưu tiên riêng theo chính sách được khoa xác nhận, không gộp thành nhãn “máy lỗi”.
+
+    Tách riêng quyết định đủ điều kiện duyệt và trạng thái gửi/ký thực tế. Chỉ hiển thị “đã ký/đã gửi” khi hệ thống đích xác nhận; cần xử lý gửi trùng, lỗi tích hợp và kết quả bị sửa sau đánh giá. Điểm tự tin, nếu có, phải nêu ý nghĩa và cách kiểm định; không dùng điểm do LLM tự tuyên bố làm xác suất an toàn.
+
+    Đơn vị ký là cả phiếu kết quả theo xét nghiệm huyết học/hóa sinh. Demo phải thể hiện giả định đang sử dụng, đặc biệt khi phiếu có cả kết quả đủ điều kiện và kết quả cần xem xét.
+
+
+7. Vai trò của rule và AI
+Đề xuất: Bắt đầu bằng bộ quy tắc có cấu hình, có giải thích và có phiên bản cho một phạm vi xét nghiệm hẹp. Quy tắc có thể khai báo bằng bảng, JSON hoặc cấu trúc tương đương để tránh phân tán logic nghiệp vụ trong nhiều khối if/else.
+
+Mỗi rule nên có mã, phạm vi áp dụng, dữ liệu bắt buộc, điều kiện, mức ưu tiên, hành động, lý do hiển thị, phiên bản và người phê duyệt. Các ngưỡng và ngoại lệ phải được người phụ trách chuyên môn xác nhận.
+
+AI có thể hỗ trợ phát hiện mẫu bất thường hoặc sắp xếp ưu tiên sau khi có dữ liệu phù hợp. LLM có thể hỗ trợ diễn giải lý do từ dữ liệu đã kiểm soát; chưa có cơ sở chọn LLM hay bất kỳ mô hình nào làm thành phần quyết định chính. Cần so sánh phương án AI với baseline rule trước khi kết luận có lợi ích.
+
+Không chốt trước mô hình, framework, schema LIS hoặc phương thức bấm ký khi chưa khảo sát.
+
+
+8. Phạm vi demo đề xuất
+Demo dùng dữ liệu sample tự tạo với các chỉ số, mô phỏng LIS và việc ký gửi. Không kết nối chữ ký hoặc phát hành kết quả thật trong bản demo ban đầu.
+
+Giao diện tối thiểu:
+- Danh sách phiếu theo trạng thái, mức ưu tiên và lý do cần kiểm tra.
+- Chi tiết phiếu: chỉ định, chỉ số hiện tại, đơn vị, khoảng tham chiếu, bối cảnh không định danh và lịch sử liên quan.
+- Phần giải thích quyết định: điều kiện nào đạt, không đạt, thiếu dữ liệu; phiên bản rule/model.
+- Thao tác người phụ trách: duyệt, giữ lại, yêu cầu kiểm tra bổ sung, ghi lý do.
+- Nhật ký quyết định và trạng thái mô phỏng ký/gửi.
+- Có thể để bác sĩ nhập thủ công một vài kết quả xét nghiệm để thử xem có chuẩn không.
+Kịch bản cần trình diễn:
+1. Kết quả đầy đủ, đáp ứng các điều kiện demo → đủ điều kiện tự động duyệt.
+2. Kết quả ngoài khoảng tham chiếu → giải thích vì sao vẫn cần xét thêm điều kiện và bối cảnh.
+3. Thay đổi so với lịch sử vượt điều kiện demo → chuyển kiểm tra.
+4. Có cờ máy, cờ mẫu hoặc trạng thái QC chặn → không ký tự động.
+5. Thiếu kết quả bắt buộc, sai đơn vị hoặc thiếu lịch sử mà rule yêu cầu → giữ lại với lý do cụ thể.
+6. Tình huống giá trị tới hạn giả lập → đi theo luồng ưu tiên đã khai báo.
+7. Người phụ trách phản hồi → ghi nhận, không tự đổi rule đang chạy.
+Ngưỡng dùng trong dữ liệu tổng hợp phải ghi rõ là cấu hình minh họa, không phải ngưỡng áp dụng lâm sàng. Nên chọn một nhóm xét nghiệm sau khi thống nhất với khoa; không mặc định một bộ rule dùng chung cho hóa sinh, huyết học và vi sinh.
+
+
+9. Học từ phản hồi và đánh giá
+Yêu cầu mong muốn là hệ thống cải thiện từ các trường hợp người phụ trách xem xét. Đề xuất triển khai: thu thập phản hồi thành dữ liệu có kiểm soát, rà soát nhãn, huấn luyện/hiệu chỉnh ngoại tuyến, đánh giá độc lập rồi mới phê duyệt phiên bản mới. Không tự học trực tiếp và tự cập nhật logic ký sau từng lần bấm duyệt.
+
+Phân biệt “người phụ trách đã duyệt” với “đã có bằng chứng kết quả đúng”. Khi có thể, ghi nhận kết quả chạy lại hoặc xác minh và lý do chuyên môn. Đánh giá cần tránh rò rỉ dữ liệu từ cùng người bệnh, mẫu, lần chạy lại hoặc thời gian tương lai giữa các tập dữ liệu.
+
+Các chỉ số đề xuất gồm: tỷ lệ đủ điều kiện tự động duyệt; tỷ lệ trường hợp cần giữ lại nhưng bị cho qua; tỷ lệ bị giữ lại không cần thiết; mức phù hợp với bộ ca đã được chuyên môn thẩm định; thời gian xử lý; kết quả theo từng nhóm xét nghiệm và tình huống thiếu dữ liệu. Không dùng riêng accuracy hoặc tỷ lệ tự động ký cao làm tiêu chí thành công. Chưa có ngưỡng nghiệm thu được thống nhất.
+
+10. Bảo vệ dữ liệu và dấu vết
+- AI không đọc họ tên, số điện thoại, địa chỉ, số giấy tờ hoặc thông tin định danh trực tiếp khác.
+- Dùng mã thay thế để liên kết lịch sử; bảng ánh xạ định danh nằm trong hệ thống được kiểm soát, ngoài thành phần AI.
+- Văn bản bệnh sử, chẩn đoán và ghi chú cũng cần xử lý nguy cơ lộ định danh; không chỉ bỏ cột họ tên.
+- Chỉ cung cấp dữ liệu cần thiết và được phép. Mã hóa danh tính bằng mã thay thế không đồng nghĩa đã loại bỏ mọi khả năng tái nhận diện.
+- Cần thống nhất nơi xử lý dữ liệu, quyền truy cập và điều kiện dùng dịch vụ bên ngoài trước khi dùng dữ liệu thực tế.
+- Lưu đầu vào/phiên bản được dùng để đánh giá theo chính sách dữ liệu, lý do quyết định, phiên bản rule/model, người can thiệp và xác nhận ký/gửi để có thể truy vết.
+
+Phần nghiên cứu tiếp theo cần trả lời:
+- Đã có nghiên cứu nào về laboratory autoverification, rule-based/ML-assisted validation và phát hiện bất thường trước trả kết quả?
+- Cơ sở nào đã triển khai, trong nhóm xét nghiệm nào, với dữ liệu và điều kiện chặn gì?
+- Hệ thống đánh giá tính đúng đắn, tỷ lệ tự động duyệt, trường hợp bỏ sót và ngoại lệ ra sao?
+- Vai trò của LIS/middleware, QC, delta check, lịch sử và thông tin lâm sàng?
+- Bằng chứng nào phù hợp để áp dụng cho demo và cần khảo sát thêm điều gì tại khoa?
+Mỗi kết luận về bệnh viện hoặc nghiên cứu phải kèm nguồn, năm, phạm vi và giới hạn. Không suy diễn tên cơ sở triển khai từ tài liệu quảng cáo chung của nhà cung cấp.
+
+
+11. Chỉ dẫn cho AI tiếp nhận dự án
+Hãy dùng tài liệu này làm bối cảnh ban đầu. Ưu tiên giữ đúng luồng kết quả máy → LIS → kiểm tra trước trả → ký/gửi hoặc chuyển người phụ trách. Khi thiếu thông tin, đánh dấu giả định và nêu câu hỏi cụ thể. Phân biệt rõ yêu cầu của chủ dự án với đề xuất thiết kế.
+
+Khi được yêu cầu triển khai, ưu tiên bản demo hoạt động được, có dữ liệu tổng hợp, lý do quyết định, thao tác kiểm tra của người phụ trách và nhật ký; nêu rõ các điều kiện chưa xác minh trước tích hợp thật.
+
+
+17. Nguồn tham khảo cho phần làm rõ
+[1] NIDDK — Managing Diabetes. Tài liệu mô tả mục tiêu kiểm soát glucose ở người bệnh tiểu đường; hỗ trợ việc không coi glucose trong mục tiêu là bằng chứng máy/mẫu lỗi. Không dùng các mức trong nguồn làm ngưỡng autoverification.
+https://www.niddk.nih.gov/health-information/diabetes/overview/managing-diabetes
+
+[2] CLSI — AUTO15, Autoverification of Medical Laboratory Results for Specific Disciplines. Trang giới thiệu hướng dẫn thiết kế và thẩm định hệ thống theo chuyên ngành; cần tiếp cận nội dung và đối chiếu SOP trước khi xây dựng rule thực tế.
+https://clsi.org/shop/standards/auto15/
+
+[3] Tổng quan nghiên cứu: D:\Vin\VM-AutoValidation\Tong_quan_nghien_cuu_AI_tu_dong_duyet_ket_qua_xet_nghiem.md 

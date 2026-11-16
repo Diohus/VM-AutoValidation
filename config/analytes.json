@@ -1,0 +1,896 @@
+{
+ "_note": "DANH MỤC MINH HỌA cho dữ liệu giả lập. Khoảng tham chiếu, giới hạn tự duyệt, giá trị tới hạn và RCV KHÔNG phải ngưỡng lâm sàng đã được khoa phê duyệt. CVi/CVg lấy gần đúng theo bảng biến thiên sinh học (Westgard/EFLM 2014) chỉ để sinh dữ liệu.",
+ "version": "catalog-demo-0.1",
+ "analytes": {
+  "GLU": {
+   "name": "Glucose",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "mmol/L",
+   "decimals": 1,
+   "dist": "lognormal",
+   "mean": 5.2,
+   "cvg": 10,
+   "cvi": 5,
+   "cva": 1.5,
+   "ref": {
+    "M": [
+     3.9,
+     6.1
+    ],
+    "F": [
+     3.9,
+     6.1
+    ]
+   },
+   "avLimits": [
+    3,
+    15
+   ],
+   "critical": [
+    2.5,
+    25
+   ],
+   "amr": [
+    0.11,
+    41.6
+   ],
+   "rcvPct": 18,
+   "altUnits": {
+    "mg/dL": 0.0555
+   }
+  },
+  "URE": {
+   "name": "Ure",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "mmol/L",
+   "decimals": 1,
+   "dist": "lognormal",
+   "mean": 5,
+   "cvg": 25,
+   "cvi": 12,
+   "cva": 2,
+   "ref": {
+    "M": [
+     2.5,
+     7.5
+    ],
+    "F": [
+     2.5,
+     7.5
+    ]
+   },
+   "avLimits": [
+    1.5,
+    20
+   ],
+   "critical": [
+    null,
+    35
+   ],
+   "amr": [
+    0.5,
+    40
+   ],
+   "rcvPct": 40,
+   "altUnits": {
+    "mg/dL": 0.357
+   }
+  },
+  "CRE": {
+   "name": "Creatinine",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "µmol/L",
+   "decimals": 0,
+   "dist": "lognormal",
+   "mean": {
+    "M": 85,
+    "F": 65
+   },
+   "cvg": 18,
+   "cvi": 5,
+   "cva": 2.5,
+   "ref": {
+    "M": [
+     62,
+     106
+    ],
+    "F": [
+     44,
+     80
+    ]
+   },
+   "avLimits": [
+    30,
+    300
+   ],
+   "critical": [
+    null,
+    800
+   ],
+   "amr": [
+    5,
+    2200
+   ],
+   "rcvPct": 18,
+   "altUnits": {
+    "mg/dL": 88.4,
+    "umol/L": 1
+   }
+  },
+  "NA": {
+   "name": "Natri",
+   "discipline": "CHEM",
+   "instrument": "COBAS_ISE",
+   "unit": "mmol/L",
+   "decimals": 0,
+   "dist": "normal",
+   "mean": 140,
+   "cvg": 0.8,
+   "cvi": 0.5,
+   "cva": 0.7,
+   "ref": {
+    "M": [
+     136,
+     145
+    ],
+    "F": [
+     136,
+     145
+    ]
+   },
+   "avLimits": [
+    130,
+    150
+   ],
+   "critical": [
+    120,
+    160
+   ],
+   "amr": [
+    80,
+    180
+   ],
+   "rcvPct": 3
+  },
+  "K": {
+   "name": "Kali",
+   "discipline": "CHEM",
+   "instrument": "COBAS_ISE",
+   "unit": "mmol/L",
+   "decimals": 1,
+   "dist": "normal",
+   "mean": 4.2,
+   "cvg": 8,
+   "cvi": 4,
+   "cva": 1.2,
+   "ref": {
+    "M": [
+     3.5,
+     5.1
+    ],
+    "F": [
+     3.5,
+     5.1
+    ]
+   },
+   "avLimits": [
+    3,
+    5.8
+   ],
+   "critical": [
+    2.8,
+    6.2
+   ],
+   "amr": [
+    1.5,
+    10
+   ],
+   "rcvPct": 14
+  },
+  "CL": {
+   "name": "Clo",
+   "discipline": "CHEM",
+   "instrument": "COBAS_ISE",
+   "unit": "mmol/L",
+   "decimals": 0,
+   "dist": "normal",
+   "mean": 103,
+   "cvg": 2,
+   "cvi": 1,
+   "cva": 0.8,
+   "ref": {
+    "M": [
+     98,
+     107
+    ],
+    "F": [
+     98,
+     107
+    ]
+   },
+   "avLimits": [
+    92,
+    112
+   ],
+   "critical": [
+    80,
+    120
+   ],
+   "amr": [
+    60,
+    140
+   ],
+   "rcvPct": 4.5
+  },
+  "CA": {
+   "name": "Calci toàn phần",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "mmol/L",
+   "decimals": 2,
+   "dist": "normal",
+   "mean": 2.35,
+   "cvg": 4,
+   "cvi": 2,
+   "cva": 1.5,
+   "ref": {
+    "M": [
+     2.15,
+     2.55
+    ],
+    "F": [
+     2.15,
+     2.55
+    ]
+   },
+   "avLimits": [
+    1.95,
+    2.8
+   ],
+   "critical": [
+    1.6,
+    3.2
+   ],
+   "amr": [
+    0.2,
+    5
+   ],
+   "rcvPct": 7,
+   "altUnits": {
+    "mg/dL": 0.2495
+   }
+  },
+  "MG": {
+   "name": "Magie",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "mmol/L",
+   "decimals": 2,
+   "dist": "normal",
+   "mean": 0.85,
+   "cvg": 6,
+   "cvi": 2.8,
+   "cva": 2,
+   "ref": {
+    "M": [
+     0.66,
+     1.07
+    ],
+    "F": [
+     0.66,
+     1.07
+    ]
+   },
+   "avLimits": [
+    0.5,
+    1.3
+   ],
+   "critical": [
+    0.4,
+    2
+   ],
+   "amr": [
+    0.1,
+    3.3
+   ],
+   "rcvPct": 10
+  },
+  "ALB": {
+   "name": "Albumin",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "g/L",
+   "decimals": 0,
+   "dist": "normal",
+   "mean": 43,
+   "cvg": 5,
+   "cvi": 2.5,
+   "cva": 2,
+   "ref": {
+    "M": [
+     35,
+     52
+    ],
+    "F": [
+     35,
+     52
+    ]
+   },
+   "avLimits": [
+    25,
+    55
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    2,
+    60
+   ],
+   "rcvPct": 9
+  },
+  "ALP": {
+   "name": "ALP",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "U/L",
+   "decimals": 0,
+   "dist": "lognormal",
+   "mean": 75,
+   "cvg": 24,
+   "cvi": 5.4,
+   "cva": 3,
+   "ref": {
+    "M": [
+     40,
+     129
+    ],
+    "F": [
+     35,
+     104
+    ]
+   },
+   "avLimits": [
+    25,
+    300
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    5,
+    1200
+   ],
+   "rcvPct": 18
+  },
+  "AST": {
+   "name": "AST",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "U/L",
+   "decimals": 0,
+   "dist": "lognormal",
+   "mean": 24,
+   "cvg": 30,
+   "cvi": 10,
+   "cva": 3,
+   "ref": {
+    "M": [
+     0,
+     40
+    ],
+    "F": [
+     0,
+     32
+    ]
+   },
+   "avLimits": [
+    5,
+    200
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    5,
+    700
+   ],
+   "rcvPct": 30
+  },
+  "ALT": {
+   "name": "ALT",
+   "discipline": "CHEM",
+   "instrument": "COBAS_C303",
+   "unit": "U/L",
+   "decimals": 0,
+   "dist": "lognormal",
+   "mean": 22,
+   "cvg": 40,
+   "cvi": 15,
+   "cva": 3,
+   "ref": {
+    "M": [
+     0,
+     41
+    ],
+    "F": [
+     0,
+     33
+    ]
+   },
+   "avLimits": [
+    5,
+    250
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    5,
+    700
+   ],
+   "rcvPct": 55
+  },
+  "WBC": {
+   "name": "Bạch cầu (WBC)",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "G/L",
+   "decimals": 1,
+   "dist": "lognormal",
+   "mean": 6.5,
+   "cvg": 20,
+   "cvi": 11,
+   "cva": 2,
+   "ref": {
+    "M": [
+     4,
+     10
+    ],
+    "F": [
+     4,
+     10
+    ]
+   },
+   "avLimits": [
+    3,
+    15
+   ],
+   "critical": [
+    1,
+    30
+   ],
+   "amr": [
+    0.05,
+    400
+   ],
+   "rcvPct": 32
+  },
+  "RBC": {
+   "name": "Hồng cầu (RBC)",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "T/L",
+   "decimals": 2,
+   "dist": "normal",
+   "mean": {
+    "M": 5,
+    "F": 4.5
+   },
+   "cvg": 7,
+   "cvi": 3.2,
+   "cva": 1.2,
+   "ref": {
+    "M": [
+     4.5,
+     5.9
+    ],
+    "F": [
+     3.9,
+     5.2
+    ]
+   },
+   "avLimits": [
+    3,
+    6.5
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    0,
+    8
+   ],
+   "rcvPct": 10,
+   "derived": false
+  },
+  "HGB": {
+   "name": "Hemoglobin",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "g/L",
+   "decimals": 0,
+   "dist": "derived",
+   "cvi": 2.8,
+   "cva": 1,
+   "ref": {
+    "M": [
+     130,
+     170
+    ],
+    "F": [
+     120,
+     155
+    ]
+   },
+   "avLimits": [
+    90,
+    185
+   ],
+   "critical": [
+    60,
+    200
+   ],
+   "amr": [
+    1,
+    250
+   ],
+   "rcvPct": 8,
+   "altUnits": {
+    "g/dL": 10
+   }
+  },
+  "HCT": {
+   "name": "Hematocrit",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "L/L",
+   "decimals": 3,
+   "dist": "derived",
+   "cvi": 2.8,
+   "cva": 1.2,
+   "ref": {
+    "M": [
+     0.4,
+     0.5
+    ],
+    "F": [
+     0.36,
+     0.46
+    ]
+   },
+   "avLimits": [
+    0.28,
+    0.56
+   ],
+   "critical": [
+    0.18,
+    0.6
+   ],
+   "amr": [
+    0.01,
+    0.8
+   ],
+   "rcvPct": 8,
+   "altUnits": {
+    "%": 0.01
+   }
+  },
+  "MCV": {
+   "name": "MCV",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "fL",
+   "decimals": 1,
+   "dist": "normal",
+   "mean": 89,
+   "cvg": 4.8,
+   "cvi": 0.8,
+   "cva": 0.6,
+   "ref": {
+    "M": [
+     80,
+     100
+    ],
+    "F": [
+     80,
+     100
+    ]
+   },
+   "avLimits": [
+    70,
+    110
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    50,
+    150
+   ],
+   "rcvPct": 4
+  },
+  "MCH": {
+   "name": "MCH",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "pg",
+   "decimals": 1,
+   "dist": "derived",
+   "cvi": 1.6,
+   "cva": 1,
+   "ref": {
+    "M": [
+     27,
+     33
+    ],
+    "F": [
+     27,
+     33
+    ]
+   },
+   "avLimits": [
+    22,
+    36
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    10,
+    50
+   ],
+   "rcvPct": 5
+  },
+  "MCHC": {
+   "name": "MCHC",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "g/L",
+   "decimals": 0,
+   "dist": "derived",
+   "cvi": 1,
+   "cva": 1,
+   "ref": {
+    "M": [
+     320,
+     360
+    ],
+    "F": [
+     320,
+     360
+    ]
+   },
+   "avLimits": [
+    300,
+    375
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    200,
+    450
+   ],
+   "rcvPct": 4
+  },
+  "RDW": {
+   "name": "RDW-CV",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "%",
+   "decimals": 1,
+   "dist": "normal",
+   "mean": 13,
+   "cvg": 6,
+   "cvi": 3.5,
+   "cva": 1.5,
+   "ref": {
+    "M": [
+     11.5,
+     14.5
+    ],
+    "F": [
+     11.5,
+     14.5
+    ]
+   },
+   "avLimits": [
+    10.5,
+    20
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    5,
+    40
+   ],
+   "rcvPct": 11
+  },
+  "PLT": {
+   "name": "Tiểu cầu (PLT)",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "G/L",
+   "decimals": 0,
+   "dist": "lognormal",
+   "mean": 250,
+   "cvg": 21,
+   "cvi": 7,
+   "cva": 3,
+   "ref": {
+    "M": [
+     150,
+     400
+    ],
+    "F": [
+     150,
+     400
+    ]
+   },
+   "avLimits": [
+    100,
+    600
+   ],
+   "critical": [
+    20,
+    1000
+   ],
+   "amr": [
+    3,
+    3000
+   ],
+   "rcvPct": 27
+  },
+  "NEU": {
+   "name": "Bạch cầu trung tính %",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "%",
+   "decimals": 1,
+   "dist": "normal",
+   "mean": 58,
+   "cvg": 12,
+   "cvi": 8,
+   "cva": 2,
+   "ref": {
+    "M": [
+     40,
+     75
+    ],
+    "F": [
+     40,
+     75
+    ]
+   },
+   "avLimits": [
+    25,
+    85
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    0,
+    100
+   ],
+   "rcvPct": 25
+  },
+  "LYM": {
+   "name": "Lympho %",
+   "discipline": "HEME",
+   "instrument": "DXH_690T",
+   "unit": "%",
+   "decimals": 1,
+   "dist": "normal",
+   "mean": 31,
+   "cvg": 20,
+   "cvi": 10,
+   "cva": 3,
+   "ref": {
+    "M": [
+     20,
+     45
+    ],
+    "F": [
+     20,
+     45
+    ]
+   },
+   "avLimits": [
+    10,
+    60
+   ],
+   "critical": [
+    null,
+    null
+   ],
+   "amr": [
+    0,
+    100
+   ],
+   "rcvPct": 30
+  }
+ },
+ "panels": {
+  "CHEM_BASIC": {
+   "name": "Hóa sinh cơ bản (thận - điện giải)",
+   "discipline": "CHEM",
+   "specimen": "SERUM",
+   "tests": [
+    "GLU",
+    "URE",
+    "CRE",
+    "NA",
+    "K",
+    "CL"
+   ]
+  },
+  "CHEM_EXT": {
+   "name": "Hóa sinh mở rộng (thận - điện giải - gan - khoáng)",
+   "discipline": "CHEM",
+   "specimen": "SERUM",
+   "tests": [
+    "GLU",
+    "URE",
+    "CRE",
+    "NA",
+    "K",
+    "CL",
+    "CA",
+    "MG",
+    "ALB",
+    "ALP",
+    "AST",
+    "ALT"
+   ]
+  },
+  "CBC": {
+   "name": "Tổng phân tích tế bào máu (CBC)",
+   "discipline": "HEME",
+   "specimen": "EDTA_WB",
+   "tests": [
+    "WBC",
+    "RBC",
+    "HGB",
+    "HCT",
+    "MCV",
+    "MCH",
+    "MCHC",
+    "RDW",
+    "PLT",
+    "NEU",
+    "LYM"
+   ]
+  }
+ },
+ "instruments": {
+  "COBAS_C303": {
+   "name": "cobas c303 (mô phỏng)",
+   "discipline": "CHEM"
+  },
+  "COBAS_ISE": {
+   "name": "cobas ISE (mô phỏng)",
+   "discipline": "CHEM"
+  },
+  "DXH_690T": {
+   "name": "DxH 690T (mô phỏng)",
+   "discipline": "HEME"
+  }
+ },
+ "_cvSource": "CVi/CVg mô phỏng: theo bảng biến thiên sinh học (Westgard 2014/EFLM) và góp ý của Codex, đã làm tròn; chỉ dùng để sinh dữ liệu."
+}

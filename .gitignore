@@ -6,3 +6,5 @@ coverage/
 *.log
 .DS_Store
 private-data/
+data/synthetic/
+data/runtime/

@@ -1,0 +1,194 @@
+{
+  "rulesetId": "HEME-AV",
+  "version": "heme-demo-1.0.0",
+  "discipline": "HEME",
+  "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
+  "approvedBy": null,
+  "effectiveFrom": "2026-11-01",
+  "note": "Bộ rule minh họa cho CBC giả lập (DxH 690T mô phỏng). Tách riêng với hóa sinh. Không dùng cho người bệnh thật.",
+  "rules": [
+    {
+      "code": "HEME-D01",
+      "type": "required_results",
+      "stage": "DATA",
+      "priority": 10,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "BLOCK",
+      "name": "Đủ kết quả theo chỉ định",
+      "reason": "Mọi chỉ số CBC được chỉ định phải có kết quả."
+    },
+    {
+      "code": "HEME-D02",
+      "type": "unit_check",
+      "stage": "DATA",
+      "priority": 11,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "BLOCK",
+      "name": "Đơn vị đúng cấu hình",
+      "reason": "Đơn vị phải khớp cấu hình; không tự quy đổi."
+    },
+    {
+      "code": "HEME-Q01",
+      "type": "qc_status",
+      "stage": "QC",
+      "priority": 20,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "BLOCK",
+      "name": "QC hiệu lực cho máy – xét nghiệm – thời điểm chạy",
+      "reason": "QC gần nhất trước khi đo phải đạt, trong vòng 24 giờ.",
+      "params": {
+        "maxAgeHours": 24
+      }
+    },
+    {
+      "code": "HEME-F01",
+      "type": "instrument_flags",
+      "stage": "INSTRUMENT",
+      "priority": 30,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "IGNORE",
+      "name": "Cờ/suspect message của máy",
+      "reason": "Cờ kỹ thuật hoặc suspect message cần xem phết máu/chạy lại theo SOP.",
+      "params": {
+        "block": [
+          "PLT_CLUMPS",
+          "CLOT_DETECTED",
+          "SAMPLE_SHORT",
+          "BLASTS",
+          "NRBC",
+          "RBC_AGGLUTINATION"
+        ],
+        "review": [
+          "IG_PRESENT",
+          "VARIANT_LYMPH",
+          "LEFT_SHIFT"
+        ]
+      }
+    },
+    {
+      "code": "HEME-S02",
+      "type": "specimen_stability",
+      "stage": "SPECIMEN",
+      "priority": 41,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "REVIEW",
+      "name": "Thời gian từ lấy mẫu đến khi đo",
+      "reason": "Mẫu EDTA để quá lâu có thể làm sai MCV, công thức bạch cầu.",
+      "params": {
+        "maxHours": {
+          "*": 24
+        }
+      }
+    },
+    {
+      "code": "HEME-L01",
+      "type": "amr",
+      "stage": "LIMIT",
+      "priority": 50,
+      "onFail": "BLOCK",
+      "onNotEvaluable": "IGNORE",
+      "name": "Trong dải đo (AMR)",
+      "reason": "Ngoài dải đo cần pha loãng/chạy lại."
+    },
+    {
+      "code": "HEME-C01",
+      "type": "critical_value",
+      "stage": "CRITICAL",
+      "priority": 51,
+      "onFail": "CRITICAL",
+      "onNotEvaluable": "IGNORE",
+      "name": "Giá trị tới hạn (luồng ưu tiên)",
+      "reason": "Chính sách giả lập: chuyển người phụ trách ngay, yêu cầu ghi nhận thông báo. Không đồng nghĩa kết quả sai."
+    },
+    {
+      "code": "HEME-L02",
+      "type": "av_limits",
+      "stage": "LIMIT",
+      "priority": 52,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Trong giới hạn tự duyệt",
+      "reason": "Ngoài giới hạn tự duyệt minh họa thì chuyển người xem."
+    },
+    {
+      "code": "HEME-H01",
+      "type": "delta_check",
+      "stage": "HISTORY",
+      "priority": 60,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "So sánh lịch sử (delta check)",
+      "reason": "Biến động vượt RCV minh họa so với lần gần nhất.",
+      "params": {
+        "windowDays": 30,
+        "rcvMultiplier": 1.3,
+        "tests": [
+          "HGB",
+          "MCV",
+          "PLT",
+          "WBC",
+          "RDW"
+        ]
+      }
+    },
+    {
+      "code": "HEME-P01",
+      "type": "personal_interval",
+      "stage": "HISTORY",
+      "priority": 62,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Ngưỡng cá nhân (từ lịch sử của chính người bệnh)",
+      "reason": "Như hóa sinh: khoảng cá nhân từ kết quả trước. Không nới cho WBC/PLT thấp tới mức tới hạn.",
+      "params": {
+        "lookbackDays": 365,
+        "minPoints": 3,
+        "z": 2.58,
+        "maxSpreadFactor": 2.5,
+        "excludeRecentEventDays": 14,
+        "tests": [
+          "WBC",
+          "HGB",
+          "MCV",
+          "MCH",
+          "RDW",
+          "PLT"
+        ],
+        "widenTests": [
+          "HGB",
+          "MCV",
+          "MCH",
+          "RDW"
+        ]
+      }
+    },
+    {
+      "code": "HEME-X01",
+      "type": "consistency",
+      "stage": "CONSISTENCY",
+      "priority": 70,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "MCHC ngoài vùng hợp lý sinh lý",
+      "reason": "MCHC quá cao có thể gặp khi ngưng kết hồng cầu, đục mẫu, tan máu; cần kiểm tra.",
+      "params": {
+        "check": "mchc_range",
+        "max": 370,
+        "min": 290
+      }
+    },
+    {
+      "code": "HEME-M01",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 80,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "IGNORE",
+      "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
+      "reason": "MCV/RDW/MCH… lệch khỏi lịch sử vượt biến thiên trong cá thể. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "params": {
+        "model": "heme_wbit"
+      }
+    }
+  ]
+}
