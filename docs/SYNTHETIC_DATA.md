@@ -11,9 +11,9 @@ Hai file này nằm trong `.gitignore` vì sinh lại được và cho ra kết 
 | | Số lượng |
 |---|---|
 | Người bệnh giả (mã `SBJ-xxxxxx`, không có tên, địa chỉ hay giấy tờ) | 3.000 |
-| Phiếu | 18.975 (train 11.207 · val 3.891 · test 3.847 · kịch bản 30) |
-| Kết quả | 190.862 |
-| Bản ghi QC | khoảng 6.100 (QC sáng 06:30 cho mỗi cặp máy–xét nghiệm; khoảng 0,6% có khoảng QC không đạt) |
+| Phiếu | 18.981 (train 11.207 · val 3.891 · test 3.847 · kịch bản 36) |
+| Kết quả | 190.898 |
+| Bản ghi QC | 6.097 (QC sáng 06:30 cho mỗi cặp máy–xét nghiệm; khoảng 0,6% có khoảng QC không đạt) |
 | Thời gian | 01/03/2026 – 16/11/2026 (ngày 16/11 là hàng đợi "hôm nay") |
 
 ## Mô hình mô phỏng ba tầng
@@ -55,6 +55,14 @@ Tập train/val/test được chia **theo người bệnh trước khi tiêm l�
 - `reviewer.action`: **người duyệt mô phỏng có nhiễu**, ví dụ chỉ giữ 55% số ca WBIT và giữ nhầm 5% số ca sạch.
 
 Mục đích là minh họa rằng "người phụ trách đã duyệt" không đồng nghĩa "kết quả đúng". Mô hình được huấn luyện trên nhãn thật của bản mô phỏng, không dùng nhãn người duyệt.
+
+## Detector XGBoost thử nghiệm
+
+`scripts/train-xgb.mjs` dùng feature từ `src/core/features.js` để huấn luyện ba detector: CBC WBIT, hóa sinh WBIT, và nhiễm EDTA/saline/D5W trong hóa sinh. Chia train/validation/test theo người bệnh; scenario bị loại. Hai detector WBIT chỉ nhận ca có lịch sử trong 90 ngày, trong khi detector nhiễm hóa sinh dùng feature mẫu hiện tại.
+
+`scripts/train-xgb.py` huấn luyện binary XGBoost (hist, depth 3, 200 cây, eta 0,05, scale positive weight); cây xử lý giá trị thiếu bằng nhánh missing. Ngưỡng chọn trên validation theo recall mục tiêu: 80% cho WBIT và 90% cho nhiễm. Kết quả detector ở `reports/xgb_comparison.json`; so sánh ba cấu hình toàn luồng ở `reports/evaluation-comparison.json`.
+
+Các lựa chọn nghiên cứu là: CBC WBIT — Graham et al. (2025), [doi:10.1093/clinchem/hvae210](https://doi.org/10.1093/clinchem/hvae210); hóa sinh WBIT — Tortosa-Carreres et al. (2026), [doi:10.1515/cclm-2025-0564](https://doi.org/10.1515/cclm-2025-0564); nhiễm hóa sinh — Farrell et al. (2026), [doi:10.1177/00045632261488751](https://doi.org/10.1177/00045632261488751), và Spies et al. (2025), [doi:10.1093/clinchem/hvae168](https://doi.org/10.1093/clinchem/hvae168). Đây là chuyển phương pháp để thử tính áp dụng, không tái tạo paper: dữ liệu, nhãn, cách chọn feature và cách huấn luyện thuộc prototype, chỉ mang tính tổng hợp.
 
 ## Giới hạn
 

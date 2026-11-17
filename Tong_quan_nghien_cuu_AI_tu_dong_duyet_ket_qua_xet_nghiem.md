@@ -20,6 +20,10 @@ Chưa có nghiên cứu nào công bố một hệ thống ML tự ký cho toàn
 
 - **Khoảng trống:** chưa có nghiên cứu ML nào cho đông máu hay vi sinh, và chưa có nghiên cứu nào ghép đủ ba lớp (luật, theo dõi máy, hợp lý theo bệnh nhân) thành một hệ thống.
 
+## Cập nhật áp dụng vào prototype
+
+Prototype hiện giữ logistic regression làm baseline và thử XGBoost cho ba detector. Ánh xạ nghiên cứu: **CBC WBIT** tham khảo Graham et al. (2025; [DOI](https://doi.org/10.1093/clinchem/hvae210)); **hóa sinh WBIT** tham khảo feature delta và pipeline Elastic Net + XGBoost của Tortosa-Carreres et al. (2026; [DOI](https://doi.org/10.1515/cclm-2025-0564)); **nhiễm EDTA/dịch truyền hóa sinh** tham khảo lần lượt Farrell et al. (2026; [DOI](https://doi.org/10.1177/00045632261488751)) và Spies et al. (2025; [DOI](https://doi.org/10.1093/clinchem/hvae168)). Đây là **chuyển phương pháp để thử tính áp dụng**, không tái tạo mô hình hay dữ liệu nghiên cứu: feature/nhãn và train/validation/test đều thuộc dữ liệu giả lập trong repo; detector nhiễm gộp nhiều kiểu nhiễm thành một bài toán prototype. So sánh tổng thể nằm tại `reports/evaluation-comparison.json`, còn kết quả detector tại `reports/xgb_comparison.json`. Không dùng các kết quả này để khẳng định hiệu quả lâm sàng.
+
 ## Phạm vi và mức độ đọc
 
 Tôi chỉ đọc được toàn văn ba bài truy cập mở; các bài còn lại nằm sau tường phí nên tôi dựa vào abstract và tài liệu chính thức đi kèm. Mọi con số trong tài liệu lấy từ các nguồn này, không suy đoán.

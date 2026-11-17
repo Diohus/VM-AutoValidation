@@ -166,7 +166,7 @@
  "algorithm": "Logistic regression, L2, Adam; z-score theo thống kê tập train; giá trị thiếu = trung bình train (kèm đặc trưng \"có lịch sử\")",
  "threshold": 0.669596668870359,
  "recallTarget": 0.9,
- "trainedAt": "2026-11-16T05:57:19.076Z",
+ "trainedAt": "2026-11-17T05:04:38.234Z",
  "trainedOn": "synthetic seed 20261116, split=train (5886 phiếu trong phạm vi, 140 dương tính)",
  "thresholdSelection": "Ngưỡng nhỏ nhất đạt recall ≥ 90% trên 35 ca dương tính của tập validation (2059 phiếu trong phạm vi; mọi phiếu hóa sinh có dữ liệu hợp lệ).",
  "status": "NGHIÊN CỨU — chỉ được nâng lên MANUAL_REVIEW, chưa được thẩm định"

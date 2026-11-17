@@ -290,7 +290,7 @@
       "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
       "reason": "Độ lệch đa chỉ số so với lịch sử bất thường so với biến thiên trong cá thể. Mô hình chỉ có quyền chuyển MANUAL_REVIEW; không vượt qua điều kiện chặn hay tự duyệt thay rule.",
       "params": {
-        "model": "chem_wbit"
+        "model": "chem_wbit_xgb"
       }
     },
     {
@@ -303,7 +303,7 @@
       "name": "Mô hình phát hiện nhiễm mẫu (EDTA / dịch truyền) — chỉ được giữ thêm",
       "reason": "Tổ hợp chỉ số gợi ý nhiễm EDTA hoặc lẫn dịch truyền. Chỉ có quyền chuyển MANUAL_REVIEW.",
       "params": {
-        "model": "chem_contam"
+        "model": "chem_contam_xgb"
       }
     }
   ]

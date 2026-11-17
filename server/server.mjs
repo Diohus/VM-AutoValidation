@@ -22,13 +22,21 @@ export function ensureArtifacts(log = console.log) {
     log('Chưa có mô hình → đang huấn luyện…');
     execFileSync(process.execPath, [root + 'scripts/train.mjs'], { stdio: 'inherit' });
   }
+  if (!existsSync(root + 'models/heme_wbit_xgb.json')) {
+    log('Chưa có detector XGBoost → đang huấn luyện…');
+    execFileSync(process.execPath, [root + 'scripts/train-xgb.mjs'], { stdio: 'inherit' });
+  }
+  if (!existsSync(root + 'models/chem_wbit_xgb.json') || !existsSync(root + 'models/chem_contam_xgb.json'))
+    execFileSync(process.execPath, [root + 'scripts/train-xgb.mjs'], { stdio: 'inherit' });
+  if (!existsSync(root + 'reports/evaluation-comparison.json'))
+    execFileSync(process.execPath, [root + 'scripts/evaluate-comparison.mjs'], { stdio: 'inherit' });
 }
 
 export function createApp({ runtimeFile = root + 'data/runtime/state.json', sendDelayMs = [700, 1800], sendFailRate = 0.1, random = Math.random } = {}) {
   const catalog = read('config/analytes.json');
   const rulesets = { CHEM: read('config/rules.chem.json'), HEME: read('config/rules.heme.json') };
   const models = Object.fromEntries(readdirSync(root + 'models').filter(f => f.endsWith('.json')).map(f => [f.replace('.json', ''), read('models/' + f)]));
-  const evaluationReport = read('reports/evaluation.json');
+  const evaluationReport = read(existsSync(root + 'reports/evaluation-comparison.json') ? 'reports/evaluation-comparison.json' : 'reports/evaluation.json');
   const ds = read('data/synthetic/dataset.json');
   const today = ds.meta.today;
   const baseReports = new Map(ds.reports.map(r => [r.reportId, r]));

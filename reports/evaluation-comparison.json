@@ -1,0 +1,1371 @@
+{
+ "generatedAt": "2026-11-17T05:05:36.229Z",
+ "seed": 20261116,
+ "disclaimer": "Same synthetic test set for all columns. Synthetic error prevalence is enriched; these results are not clinical performance or real-world predictive values.",
+ "variants": {
+  "ruleOnly": "Rule engine with all model checks disabled",
+  "ruleLogistic": "Rules plus the retained legacy logistic-regression detectors",
+  "ruleXgboost": "Rules plus the XGBoost detectors currently used by the app"
+ },
+ "disciplines": {
+  "CHEM": {
+   "reports": 2068,
+   "ruleOnly": {
+    "reports": 2068,
+    "autoApproveRate": {
+     "k": 1545,
+     "n": 2068,
+     "value": 0.7470986460348162,
+     "ci95": [
+      0.7279176067088448,
+      0.7653633468157877
+     ]
+    },
+    "falsePassPerAutoApproved": {
+     "k": 31,
+     "n": 1545,
+     "value": 0.020064724919093852,
+     "ci95": [
+      0.014170966084713597,
+      0.02833925574817106
+     ]
+    },
+    "missedAmongNeedsReview": {
+     "k": 31,
+     "n": 252,
+     "value": 0.12301587301587301,
+     "ci95": [
+      0.08803213677720582,
+      0.1693208503835999
+     ]
+    },
+    "missedSampleErrors": {
+     "k": 31,
+     "n": 225,
+     "value": 0.13777777777777778,
+     "ci95": [
+      0.09878955529049425,
+      0.18892736331171794
+     ]
+    },
+    "unnecessaryHold": {
+     "k": 302,
+     "n": 1816,
+     "value": 0.16629955947136563,
+     "ci95": [
+      0.149881859047273,
+      0.18412611175633983
+     ]
+    },
+    "holdCleanPolicyOnly": {
+     "k": 50,
+     "n": 1816,
+     "value": 0.02753303964757709,
+     "ci95": [
+      0.020946502838291397,
+      0.03611428750741781
+     ]
+    },
+    "holdCleanOther": {
+     "k": 252,
+     "n": 1816,
+     "value": 0.13876651982378854,
+     "ci95": [
+      0.12362742364095874,
+      0.15543070977021287
+     ]
+    },
+    "blockedRate": {
+     "k": 195,
+     "n": 2068,
+     "value": 0.09429400386847195,
+     "ci95": [
+      0.0824399495973093,
+      0.10765257485050565
+     ]
+    },
+    "manualReviewRate": {
+     "k": 328,
+     "n": 2068,
+     "value": 0.15860735009671179,
+     "ci95": [
+      0.14349726223904255,
+      0.17498345559189588
+     ]
+    }
+   },
+   "ruleLogistic": {
+    "reports": 2068,
+    "autoApproveRate": {
+     "k": 1534,
+     "n": 2068,
+     "value": 0.741779497098646,
+     "ci95": [
+      0.7224802329682364,
+      0.7601821481713257
+     ]
+    },
+    "falsePassPerAutoApproved": {
+     "k": 30,
+     "n": 1534,
+     "value": 0.01955671447196871,
+     "ci95": [
+      0.013732741818841404,
+      0.027781026569268272
+     ]
+    },
+    "missedAmongNeedsReview": {
+     "k": 30,
+     "n": 252,
+     "value": 0.11904761904761904,
+     "ci95": [
+      0.08467443584110622,
+      0.16486121434244486
+     ]
+    },
+    "missedSampleErrors": {
+     "k": 30,
+     "n": 225,
+     "value": 0.13333333333333333,
+     "ci95": [
+      0.095016870162921,
+      0.18396037872888887
+     ]
+    },
+    "unnecessaryHold": {
+     "k": 312,
+     "n": 1816,
+     "value": 0.17180616740088106,
+     "ci95": [
+      0.15515408648850335,
+      0.18984385179359775
+     ]
+    },
+    "holdCleanPolicyOnly": {
+     "k": 50,
+     "n": 1816,
+     "value": 0.02753303964757709,
+     "ci95": [
+      0.020946502838291397,
+      0.03611428750741781
+     ]
+    },
+    "holdCleanOther": {
+     "k": 262,
+     "n": 1816,
+     "value": 0.14427312775330398,
+     "ci95": [
+      0.1288630250178945,
+      0.1611850758717654
+     ]
+    },
+    "blockedRate": {
+     "k": 195,
+     "n": 2068,
+     "value": 0.09429400386847195,
+     "ci95": [
+      0.0824399495973093,
+      0.10765257485050565
+     ]
+    },
+    "manualReviewRate": {
+     "k": 339,
+     "n": 2068,
+     "value": 0.163926499032882,
+     "ci95": [
+      0.14859613832118548,
+      0.18050315189482333
+     ]
+    }
+   },
+   "ruleXgboost": {
+    "reports": 2068,
+    "autoApproveRate": {
+     "k": 1524,
+     "n": 2068,
+     "value": 0.7369439071566731,
+     "ci95": [
+      0.7175403124811948,
+      0.755468821035576
+     ]
+    },
+    "falsePassPerAutoApproved": {
+     "k": 28,
+     "n": 1524,
+     "value": 0.01837270341207349,
+     "ci95": [
+      0.012741626747248496,
+      0.026425784324684613
+     ]
+    },
+    "missedAmongNeedsReview": {
+     "k": 28,
+     "n": 252,
+     "value": 0.1111111111111111,
+     "ci95": [
+      0.0780003314318283,
+      0.15590064479721344
+     ]
+    },
+    "missedSampleErrors": {
+     "k": 28,
+     "n": 225,
+     "value": 0.12444444444444444,
+     "ci95": [
+      0.08751884508862377,
+      0.17397906438238148
+     ]
+    },
+    "unnecessaryHold": {
+     "k": 320,
+     "n": 1816,
+     "value": 0.1762114537444934,
+     "ci95": [
+      0.15937653242270358,
+      0.19441337984218812
+     ]
+    },
+    "holdCleanPolicyOnly": {
+     "k": 50,
+     "n": 1816,
+     "value": 0.02753303964757709,
+     "ci95": [
+      0.020946502838291397,
+      0.03611428750741781
+     ]
+    },
+    "holdCleanOther": {
+     "k": 270,
+     "n": 1816,
+     "value": 0.1486784140969163,
+     "ci95": [
+      0.1330572761843563,
+      0.16578279868809415
+     ]
+    },
+    "blockedRate": {
+     "k": 195,
+     "n": 2068,
+     "value": 0.09429400386847195,
+     "ci95": [
+      0.0824399495973093,
+      0.10765257485050565
+     ]
+    },
+    "manualReviewRate": {
+     "k": 349,
+     "n": 2068,
+     "value": 0.16876208897485492,
+     "ci95": [
+      0.15323667518145037,
+      0.18551586265734968
+     ]
+    }
+   },
+   "perErrorType": {
+    "d5w": {
+     "n": 7,
+     "ruleOnlyCaught": {
+      "k": 7,
+      "n": 7,
+      "value": 1,
+      "ci95": [
+       0.6456611570247934,
+       1
+      ]
+     },
+     "logisticCaught": {
+      "k": 7,
+      "n": 7,
+      "value": 1,
+      "ci95": [
+       0.6456611570247934,
+       1
+      ]
+     },
+     "xgboostCaught": {
+      "k": 7,
+      "n": 7,
+      "value": 1,
+      "ci95": [
+       0.6456611570247934,
+       1
+      ]
+     }
+    },
+    "delayed": {
+     "n": 17,
+     "ruleOnlyCaught": {
+      "k": 17,
+      "n": 17,
+      "value": 1,
+      "ci95": [
+       0.8156763396284354,
+       1
+      ]
+     },
+     "logisticCaught": {
+      "k": 17,
+      "n": 17,
+      "value": 1,
+      "ci95": [
+       0.8156763396284354,
+       1
+      ]
+     },
+     "xgboostCaught": {
+      "k": 17,
+      "n": 17,
+      "value": 1,
+      "ci95": [
+       0.8156763396284354,
+       1
+      ]
+     }
+    },
+    "edta": {
+     "n": 16,
+     "ruleOnlyCaught": {
+      "k": 16,
+      "n": 16,
+      "value": 1,
+      "ci95": [
+       0.8063865817272801,
+       1
+      ]
+     },
+     "logisticCaught": {
+      "k": 16,
+      "n": 16,
+      "value": 1,
+      "ci95": [
+       0.8063865817272801,
+       1
+      ]
+     },
+     "xgboostCaught": {
+      "k": 16,
+      "n": 16,
+      "value": 1,
+      "ci95": [
+       0.8063865817272801,
+       1
+      ]
+     }
+    },
+    "hemolysis": {
+     "n": 78,
+     "ruleOnlyCaught": {
+      "k": 78,
+      "n": 78,
+      "value": 1,
+      "ci95": [
+       0.9530605462258802,
+       1.0000000000000002
+      ]
+     },
+     "logisticCaught": {
+      "k": 78,
+      "n": 78,
+      "value": 1,
+      "ci95": [
+       0.9530605462258802,
+       1.0000000000000002
+      ]
+     },
+     "xgboostCaught": {
+      "k": 78,
+      "n": 78,
+      "value": 1,
+      "ci95": [
+       0.9530605462258802,
+       1.0000000000000002
+      ]
+     }
+    },
+    "qc_window": {
+     "n": 20,
+     "ruleOnlyCaught": {
+      "k": 20,
+      "n": 20,
+      "value": 1,
+      "ci95": [
+       0.8388698745050667,
+       0.9999999999999998
+      ]
+     },
+     "logisticCaught": {
+      "k": 20,
+      "n": 20,
+      "value": 1,
+      "ci95": [
+       0.8388698745050667,
+       0.9999999999999998
+      ]
+     },
+     "xgboostCaught": {
+      "k": 20,
+      "n": 20,
+      "value": 1,
+      "ci95": [
+       0.8388698745050667,
+       0.9999999999999998
+      ]
+     }
+    },
+    "saline": {
+     "n": 23,
+     "ruleOnlyCaught": {
+      "k": 22,
+      "n": 23,
+      "value": 0.9565217391304348,
+      "ci95": [
+       0.7900841350594088,
+       0.9922835330378733
+      ]
+     },
+     "logisticCaught": {
+      "k": 22,
+      "n": 23,
+      "value": 0.9565217391304348,
+      "ci95": [
+       0.7900841350594088,
+       0.9922835330378733
+      ]
+     },
+     "xgboostCaught": {
+      "k": 22,
+      "n": 23,
+      "value": 0.9565217391304348,
+      "ci95": [
+       0.7900841350594088,
+       0.9922835330378733
+      ]
+     }
+    },
+    "short_sample": {
+     "n": 3,
+     "ruleOnlyCaught": {
+      "k": 3,
+      "n": 3,
+      "value": 1,
+      "ci95": [
+       0.4384939195509822,
+       1
+      ]
+     },
+     "logisticCaught": {
+      "k": 3,
+      "n": 3,
+      "value": 1,
+      "ci95": [
+       0.4384939195509822,
+       1
+      ]
+     },
+     "xgboostCaught": {
+      "k": 3,
+      "n": 3,
+      "value": 1,
+      "ci95": [
+       0.4384939195509822,
+       1
+      ]
+     }
+    },
+    "wbit": {
+     "n": 61,
+     "ruleOnlyCaught": {
+      "k": 31,
+      "n": 61,
+      "value": 0.5081967213114754,
+      "ci95": [
+       0.386024064532302,
+       0.6293981335627481
+      ]
+     },
+     "logisticCaught": {
+      "k": 32,
+      "n": 61,
+      "value": 0.5245901639344263,
+      "ci95": [
+       0.4015694171531101,
+       0.6446971771320403
+      ]
+     },
+     "xgboostCaught": {
+      "k": 34,
+      "n": 61,
+      "value": 0.5573770491803278,
+      "ci95": [
+       0.433031467004555,
+       0.6749239196607955
+      ]
+     }
+    }
+   }
+  },
+  "HEME": {
+   "reports": 1779,
+   "ruleOnly": {
+    "reports": 1779,
+    "autoApproveRate": {
+     "k": 1497,
+     "n": 1779,
+     "value": 0.8414839797639123,
+     "ci95": [
+      0.823778709193022,
+      0.8577176166723831
+     ]
+    },
+    "falsePassPerAutoApproved": {
+     "k": 36,
+     "n": 1497,
+     "value": 0.02404809619238477,
+     "ci95": [
+      0.017420457711403426,
+      0.033112256733611956
+     ]
+    },
+    "missedAmongNeedsReview": {
+     "k": 36,
+     "n": 176,
+     "value": 0.20454545454545456,
+     "ci95": [
+      0.1515657672943556,
+      0.2701475626582249
+     ]
+    },
+    "missedSampleErrors": {
+     "k": 36,
+     "n": 105,
+     "value": 0.34285714285714286,
+     "ci95": [
+      0.25905582525585225,
+      0.43775127791058405
+     ]
+    },
+    "unnecessaryHold": {
+     "k": 142,
+     "n": 1603,
+     "value": 0.08858390517779165,
+     "ci95": [
+      0.07563943849168522,
+      0.10349558016852375
+     ]
+    },
+    "holdCleanPolicyOnly": {
+     "k": 60,
+     "n": 1603,
+     "value": 0.037429819089207735,
+     "ci95": [
+      0.029189068719928223,
+      0.04788237379189124
+     ]
+    },
+    "holdCleanOther": {
+     "k": 82,
+     "n": 1603,
+     "value": 0.051154086088583905,
+     "ci95": [
+      0.041401582176734786,
+      0.06305277100904283
+     ]
+    },
+    "blockedRate": {
+     "k": 47,
+     "n": 1779,
+     "value": 0.026419336706014616,
+     "ci95": [
+      0.019925488490955913,
+      0.03495409251051949
+     ]
+    },
+    "manualReviewRate": {
+     "k": 235,
+     "n": 1779,
+     "value": 0.13209668353007306,
+     "ci95": [
+      0.11715202618868137,
+      0.1486268293192897
+     ]
+    }
+   },
+   "ruleLogistic": {
+    "reports": 1779,
+    "autoApproveRate": {
+     "k": 1460,
+     "n": 1779,
+     "value": 0.8206857785272625,
+     "ci95": [
+      0.8021741799462229,
+      0.8378153738088613
+     ]
+    },
+    "falsePassPerAutoApproved": {
+     "k": 24,
+     "n": 1460,
+     "value": 0.01643835616438356,
+     "ci95": [
+      0.011071047750413168,
+      0.024343712972331694
+     ]
+    },
+    "missedAmongNeedsReview": {
+     "k": 24,
+     "n": 176,
+     "value": 0.13636363636363635,
+     "ci95": [
+      0.09337703293860432,
+      0.1948855270030332
+     ]
+    },
+    "missedSampleErrors": {
+     "k": 24,
+     "n": 105,
+     "value": 0.22857142857142856,
+     "ci95": [
+      0.15868283892521592,
+      0.3176203392713559
+     ]
+    },
+    "unnecessaryHold": {
+     "k": 167,
+     "n": 1603,
+     "value": 0.1041796631316282,
+     "ci95": [
+      0.09015875712310664,
+      0.12009320548478204
+     ]
+    },
+    "holdCleanPolicyOnly": {
+     "k": 59,
+     "n": 1603,
+     "value": 0.036805988771054274,
+     "ci95": [
+      0.02864070781033543,
+      0.047186056943576846
+     ]
+    },
+    "holdCleanOther": {
+     "k": 108,
+     "n": 1603,
+     "value": 0.06737367436057393,
+     "ci95": [
+      0.05610786576604597,
+      0.08070810912531856
+     ]
+    },
+    "blockedRate": {
+     "k": 47,
+     "n": 1779,
+     "value": 0.026419336706014616,
+     "ci95": [
+      0.019925488490955913,
+      0.03495409251051949
+     ]
+    },
+    "manualReviewRate": {
+     "k": 272,
+     "n": 1779,
+     "value": 0.1528948847667229,
+     "ci95": [
+      0.13692037394204631,
+      0.17036525367624575
+     ]
+    }
+   },
+   "ruleXgboost": {
+    "reports": 1779,
+    "autoApproveRate": {
+     "k": 1470,
+     "n": 1779,
+     "value": 0.8263069139966274,
+     "ci95": [
+      0.8080039692085303,
+      0.8432036310628568
+     ]
+    },
+    "falsePassPerAutoApproved": {
+     "k": 25,
+     "n": 1470,
+     "value": 0.017006802721088437,
+     "ci95": [
+      0.01154564404033301,
+      0.024985825827256565
+     ]
+    },
+    "missedAmongNeedsReview": {
+     "k": 25,
+     "n": 176,
+     "value": 0.14204545454545456,
+     "ci95": [
+      0.09810004439440695,
+      0.20128341304814254
+     ]
+    },
+    "missedSampleErrors": {
+     "k": 25,
+     "n": 105,
+     "value": 0.23809523809523808,
+     "ci95": [
+      0.16678968751856937,
+      0.32788881775882445
+     ]
+    },
+    "unnecessaryHold": {
+     "k": 158,
+     "n": 1603,
+     "value": 0.09856519026824703,
+     "ci95": [
+      0.08491870441915637,
+      0.11413115836756758
+     ]
+    },
+    "holdCleanPolicyOnly": {
+     "k": 59,
+     "n": 1603,
+     "value": 0.036805988771054274,
+     "ci95": [
+      0.02864070781033543,
+      0.047186056943576846
+     ]
+    },
+    "holdCleanOther": {
+     "k": 99,
+     "n": 1603,
+     "value": 0.061759201497192766,
+     "ci95": [
+      0.05099036729329266,
+      0.07462350777690718
+     ]
+    },
+    "blockedRate": {
+     "k": 47,
+     "n": 1779,
+     "value": 0.026419336706014616,
+     "ci95": [
+      0.019925488490955913,
+      0.03495409251051949
+     ]
+    },
+    "manualReviewRate": {
+     "k": 262,
+     "n": 1779,
+     "value": 0.14727374929735806,
+     "ci95": [
+      0.13156619343892123,
+      0.16450138766306788
+     ]
+    }
+   },
+   "perErrorType": {
+    "clot": {
+     "n": 5,
+     "ruleOnlyCaught": {
+      "k": 5,
+      "n": 5,
+      "value": 1,
+      "ci95": [
+       0.565508505247919,
+       1.0000000000000002
+      ]
+     },
+     "logisticCaught": {
+      "k": 5,
+      "n": 5,
+      "value": 1,
+      "ci95": [
+       0.565508505247919,
+       1.0000000000000002
+      ]
+     },
+     "xgboostCaught": {
+      "k": 5,
+      "n": 5,
+      "value": 1,
+      "ci95": [
+       0.565508505247919,
+       1.0000000000000002
+      ]
+     }
+    },
+    "delayed": {
+     "n": 13,
+     "ruleOnlyCaught": {
+      "k": 13,
+      "n": 13,
+      "value": 1,
+      "ci95": [
+       0.7718981569447084,
+       1
+      ]
+     },
+     "logisticCaught": {
+      "k": 13,
+      "n": 13,
+      "value": 1,
+      "ci95": [
+       0.7718981569447084,
+       1
+      ]
+     },
+     "xgboostCaught": {
+      "k": 13,
+      "n": 13,
+      "value": 1,
+      "ci95": [
+       0.7718981569447084,
+       1
+      ]
+     }
+    },
+    "plt_clump": {
+     "n": 31,
+     "ruleOnlyCaught": {
+      "k": 29,
+      "n": 31,
+      "value": 0.9354838709677419,
+      "ci95": [
+       0.7928101168125355,
+       0.9821255922249368
+      ]
+     },
+     "logisticCaught": {
+      "k": 29,
+      "n": 31,
+      "value": 0.9354838709677419,
+      "ci95": [
+       0.7928101168125355,
+       0.9821255922249368
+      ]
+     },
+     "xgboostCaught": {
+      "k": 29,
+      "n": 31,
+      "value": 0.9354838709677419,
+      "ci95": [
+       0.7928101168125355,
+       0.9821255922249368
+      ]
+     }
+    },
+    "qc_window": {
+     "n": 4,
+     "ruleOnlyCaught": {
+      "k": 4,
+      "n": 4,
+      "value": 1,
+      "ci95": [
+       0.5100999795960008,
+       1
+      ]
+     },
+     "logisticCaught": {
+      "k": 4,
+      "n": 4,
+      "value": 1,
+      "ci95": [
+       0.5100999795960008,
+       1
+      ]
+     },
+     "xgboostCaught": {
+      "k": 4,
+      "n": 4,
+      "value": 1,
+      "ci95": [
+       0.5100999795960008,
+       1
+      ]
+     }
+    },
+    "wbit": {
+     "n": 52,
+     "ruleOnlyCaught": {
+      "k": 18,
+      "n": 52,
+      "value": 0.34615384615384615,
+      "ci95": [
+       0.23150828073938615,
+       0.4819669778491929
+      ]
+     },
+     "logisticCaught": {
+      "k": 30,
+      "n": 52,
+      "value": 0.5769230769230769,
+      "ci95": [
+       0.44194084979431497,
+       0.7013215209113953
+      ]
+     },
+     "xgboostCaught": {
+      "k": 29,
+      "n": 52,
+      "value": 0.5576923076923077,
+      "ci95": [
+       0.4233952499151638,
+       0.6840515281141191
+      ]
+     }
+    }
+   }
+  }
+ },
+ "papers": {
+  "heme_wbit_xgb": "Graham et al. 2025, doi:10.1093/clinchem/hvae210",
+  "chem_wbit_xgb": "Tortosa-Carreres et al. 2026, doi:10.1515/cclm-2025-0564",
+  "chem_contam_xgb": "Farrell et al. 2026, doi:10.1177/00045632261488751; Spies et al. 2025, doi:10.1093/clinchem/hvae168"
+ },
+ "definitions": {
+  "autoApproveRate": "Số phiếu AUTO_APPROVE_ELIGIBLE / tổng phiếu",
+  "falsePassPerAutoApproved": "Số phiếu tự duyệt mà ground truth cần xem xét / số phiếu tự duyệt",
+  "missedAmongNeedsReview": "Số phiếu cần xem xét bị tự duyệt / tổng số phiếu cần xem xét (lỗi mẫu + dữ liệu + tới hạn + cờ bệnh lý)",
+  "missedSampleErrors": "Số phiếu có lỗi mẫu/phân tích bị tự duyệt / tổng phiếu có lỗi mẫu",
+  "unnecessaryHold": "Số phiếu KHÔNG có lỗi mẫu/dữ liệu/tới hạn/cờ bệnh lý (theo nhãn giả lập) nhưng bị giữ / tổng số phiếu đó. Bao gồm cả các phiếu bị giữ đúng theo chính sách (ngoài giới hạn tự duyệt, thiếu lịch sử bắt buộc).",
+  "holdCleanPolicyOnly": "Phần của chỉ số trên chỉ do rule chính sách (ngoài giới hạn tự duyệt, thiếu lịch sử bắt buộc) — giữ theo cấu hình, không phải \"sai\".",
+  "holdCleanOther": "Phần còn lại: phiếu không có lỗi bị giữ bởi delta check, nhất quán, HIL, mô hình… — đây mới là \"báo động giả\" thực sự cần giảm.",
+  "agreementWithSimulatedReviewer": "Tỷ lệ trùng quyết định giữ/duyệt với người duyệt MÔ PHỎNG (có nhiễu) — \"người duyệt đã duyệt\" ≠ \"kết quả đúng\""
+ },
+ "logisticDetectorReports": {
+  "chem_wbit": {
+   "key": "chem_wbit",
+   "name": "Nghi nhầm mẫu (WBIT) — hóa sinh",
+   "discipline": "CHEM",
+   "targets": [
+    "wbit"
+   ],
+   "scope": "chỉ ca có lịch sử ≤90 ngày (không có lịch sử thì không thể so sánh)",
+   "version": "chem_wbit-logreg-0.2.0",
+   "threshold": 0.26721601048028154,
+   "recallTarget": 0.8,
+   "thresholdSelection": "Ngưỡng nhỏ nhất đạt recall ≥ 80% trên 27 ca dương tính của tập validation (1215 phiếu trong phạm vi; chỉ ca có lịch sử ≤90 ngày (không có lịch sử thì không thể so sánh)).",
+   "train": {
+    "n": 3488,
+    "positives": 95
+   },
+   "validation": {
+    "n": 1215,
+    "positives": 27,
+    "rocAuc": 0.9473749844120218,
+    "prAuc": 0.3215153504166577,
+    "negatives": 1188
+   },
+   "test": {
+    "n": 1269,
+    "rocAuc": 0.9438064366751532,
+    "prAuc": 0.38448500404628533,
+    "positives": 35,
+    "negatives": 1234,
+    "sensitivity": {
+     "k": 29,
+     "n": 35,
+     "value": 0.8285714285714286,
+     "ci95": [
+      0.6731739236041119,
+      0.9189747005514327
+     ]
+    },
+    "specificity": {
+     "k": 1140,
+     "n": 1234,
+     "value": 0.9238249594813615,
+     "ci95": [
+      0.9076729053251394,
+      0.9373463604678345
+     ]
+    },
+    "flagRate": {
+     "k": 123,
+     "n": 1269,
+     "value": 0.09692671394799054,
+     "ci95": [
+      0.08184408242389427,
+      0.11444239972753761
+     ]
+    },
+    "tp": 29,
+    "fp": 94,
+    "fn": 6,
+    "tn": 1140
+   },
+   "ppvAtAssumedPrevalence": [
+    {
+     "prevalence": 0.01,
+     "ppv": 0.09899417974196123
+    },
+    {
+     "prevalence": 0.001,
+     "ppv": 0.010770818083753905
+    },
+    {
+     "prevalence": 0.0003,
+     "ppv": 0.003253520389188414
+    }
+   ],
+   "ppvNote": "PPV ước tính từ độ nhạy/đặc hiệu trên tập test giả lập với tỷ lệ lỗi GIẢ ĐỊNH — không đo trực tiếp; bất định lớn (cỡ mẫu dương tính nhỏ).",
+   "topWeights": [
+    {
+     "feature": "delta_ms",
+     "weight": -1.9865953118479216
+    },
+    {
+     "feature": "ad_ALP",
+     "weight": 1.2178232560603879
+    },
+    {
+     "feature": "ad_MG",
+     "weight": -0.796558048767695
+    },
+    {
+     "feature": "ad_CRE",
+     "weight": 0.6775166481047598
+    },
+    {
+     "feature": "n_deltas",
+     "weight": -0.6757539366305314
+    },
+    {
+     "feature": "delta_max_abs",
+     "weight": 0.5936701234407786
+    },
+    {
+     "feature": "ad_URE",
+     "weight": 0.5633426384741922
+    },
+    {
+     "feature": "ad_ALT",
+     "weight": 0.5146824255201371
+    },
+    {
+     "feature": "ad_GLU",
+     "weight": 0.49655714991519895
+    },
+    {
+     "feature": "ad_AST",
+     "weight": 0.3792486703644078
+    }
+   ]
+  },
+  "chem_contam": {
+   "key": "chem_contam",
+   "name": "Nghi nhiễm EDTA / lẫn dịch truyền — hóa sinh",
+   "discipline": "CHEM",
+   "targets": [
+    "edta",
+    "saline",
+    "d5w"
+   ],
+   "scope": "mọi phiếu hóa sinh có dữ liệu hợp lệ",
+   "version": "chem_contam-logreg-0.2.0",
+   "threshold": 0.669596668870359,
+   "recallTarget": 0.9,
+   "thresholdSelection": "Ngưỡng nhỏ nhất đạt recall ≥ 90% trên 35 ca dương tính của tập validation (2059 phiếu trong phạm vi; mọi phiếu hóa sinh có dữ liệu hợp lệ).",
+   "train": {
+    "n": 5886,
+    "positives": 140
+   },
+   "validation": {
+    "n": 2059,
+    "positives": 35,
+    "rocAuc": 0.9664737436476497,
+    "prAuc": 0.9178767575229572,
+    "negatives": 2024
+   },
+   "test": {
+    "n": 2039,
+    "rocAuc": 0.9852200091625063,
+    "prAuc": 0.9170201902719057,
+    "positives": 46,
+    "negatives": 1993,
+    "sensitivity": {
+     "k": 40,
+     "n": 46,
+     "value": 0.8695652173913043,
+     "ci95": [
+      0.7433386576963866,
+      0.9388224286250797
+     ]
+    },
+    "specificity": {
+     "k": 1983,
+     "n": 1993,
+     "value": 0.994982438534872,
+     "ci95": [
+      0.9907880508681072,
+      0.9972722940285536
+     ]
+    },
+    "flagRate": {
+     "k": 50,
+     "n": 2039,
+     "value": 0.024521824423737126,
+     "ci95": [
+      0.018649698078093566,
+      0.0321822411187585
+     ]
+    },
+    "tp": 40,
+    "fp": 10,
+    "fn": 6,
+    "tn": 1983
+   },
+   "ppvAtAssumedPrevalence": [
+    {
+     "prevalence": 0.01,
+     "ppv": 0.6364362126776283
+    },
+    {
+     "prevalence": 0.001,
+     "ppv": 0.14783221451618767
+    },
+    {
+     "prevalence": 0.0003,
+     "ppv": 0.04943589828392317
+    }
+   ],
+   "ppvNote": "PPV ước tính từ độ nhạy/đặc hiệu trên tập test giả lập với tỷ lệ lỗi GIẢ ĐỊNH — không đo trực tiếp; bất định lớn (cỡ mẫu dương tính nhỏ).",
+   "topWeights": [
+    {
+     "feature": "na_cl_gap",
+     "weight": -1.720014200645424
+    },
+    {
+     "feature": "z_CA",
+     "weight": -1.512167359490545
+    },
+    {
+     "feature": "z_NA",
+     "weight": 1.3012883588108826
+    },
+    {
+     "feature": "z_K",
+     "weight": 1.2634166168651533
+    },
+    {
+     "feature": "d_CL",
+     "weight": 1.072370232918984
+    },
+    {
+     "feature": "k_minus_alp",
+     "weight": -0.9966931262223037
+    },
+    {
+     "feature": "d_NA",
+     "weight": -0.7996147564366375
+    },
+    {
+     "feature": "z_ALB",
+     "weight": -0.7926836386141116
+    },
+    {
+     "feature": "n_deltas",
+     "weight": -0.757534227771265
+    },
+    {
+     "feature": "acute_setting",
+     "weight": 0.6546336738639522
+    }
+   ]
+  },
+  "heme_wbit": {
+   "key": "heme_wbit",
+   "name": "Nghi nhầm mẫu (WBIT) — CBC",
+   "discipline": "HEME",
+   "targets": [
+    "wbit"
+   ],
+   "scope": "chỉ ca có lịch sử ≤90 ngày",
+   "version": "heme_wbit-logreg-0.2.0",
+   "threshold": 0.39124381896451776,
+   "recallTarget": 0.8,
+   "thresholdSelection": "Ngưỡng nhỏ nhất đạt recall ≥ 80% trên 22 ca dương tính của tập validation (1012 phiếu trong phạm vi; chỉ ca có lịch sử ≤90 ngày).",
+   "train": {
+    "n": 2936,
+    "positives": 83
+   },
+   "validation": {
+    "n": 1012,
+    "positives": 22,
+    "rocAuc": 0.9674471992653809,
+    "prAuc": 0.47785486781617875,
+    "negatives": 990
+   },
+   "test": {
+    "n": 1014,
+    "rocAuc": 0.9724096232179226,
+    "prAuc": 0.4691399570588739,
+    "positives": 32,
+    "negatives": 982,
+    "sensitivity": {
+     "k": 26,
+     "n": 32,
+     "value": 0.8125,
+     "ci95": [
+      0.6469050424507756,
+      0.9111057606383722
+     ]
+    },
+    "specificity": {
+     "k": 934,
+     "n": 982,
+     "value": 0.9511201629327902,
+     "ci95": [
+      0.9357882488035908,
+      0.962936252171008
+     ]
+    },
+    "flagRate": {
+     "k": 74,
+     "n": 1014,
+     "value": 0.07297830374753451,
+     "ci95": [
+      0.05852962026003819,
+      0.09065037002528713
+     ]
+    },
+    "tp": 26,
+    "fp": 48,
+    "fn": 6,
+    "tn": 934
+   },
+   "ppvAtAssumedPrevalence": [
+    {
+     "prevalence": 0.01,
+     "ppv": 0.14376449920043244
+    },
+    {
+     "prevalence": 0.001,
+     "ppv": 0.016366708632586238
+    },
+    {
+     "prevalence": 0.0003,
+     "ppv": 0.004963456425704841
+    }
+   ],
+   "ppvNote": "PPV ước tính từ độ nhạy/đặc hiệu trên tập test giả lập với tỷ lệ lỗi GIẢ ĐỊNH — không đo trực tiếp; bất định lớn (cỡ mẫu dương tính nhỏ).",
+   "topWeights": [
+    {
+     "feature": "delta_ms",
+     "weight": -1.6114965378538435
+    },
+    {
+     "feature": "ad_PLT",
+     "weight": 1.0137706805435331
+    },
+    {
+     "feature": "ad_RBC",
+     "weight": 0.6935486837957392
+    },
+    {
+     "feature": "ad_MCV",
+     "weight": 0.6618660168805731
+    },
+    {
+     "feature": "ad_MCH",
+     "weight": 0.60092160836723
+    },
+    {
+     "feature": "ad_MCHC",
+     "weight": 0.5423286723368136
+    },
+    {
+     "feature": "ad_LYM",
+     "weight": 0.48438559528750297
+    },
+    {
+     "feature": "ad_RDW",
+     "weight": 0.47904123011393707
+    },
+    {
+     "feature": "ad_HGB",
+     "weight": 0.3765668497565653
+    },
+    {
+     "feature": "ad_NEU",
+     "weight": 0.3579475327421479
+    }
+   ]
+  }
+ },
+ "xgbDetectorReports": {
+  "chem_wbit_xgb": {
+   "name": "WBIT — hóa sinh",
+   "targets": [
+    "wbit"
+   ],
+   "scope": "Hóa sinh với lịch sử ≤90 ngày",
+   "threshold": 0.3860167860984802,
+   "recallTarget": 0.8,
+   "trainedOn": {
+    "train": 3488,
+    "positives": 95,
+    "validation": 1215,
+    "test": 1269
+   },
+   "syntheticTest": {
+    "tp": 29,
+    "fp": 81,
+    "fn": 6,
+    "tn": 1153,
+    "sensitivity": 0.8285714285714286,
+    "specificity": 0.9343598055105349
+   },
+   "paperBasis": "Tortosa-Carreres et al. 2026, CCLM, doi:10.1515/cclm-2025-0564",
+   "paperUrl": "https://doi.org/10.1515/cclm-2025-0564"
+  },
+  "chem_contam_xgb": {
+   "name": "Nhiễm mẫu — EDTA / dịch truyền",
+   "targets": [
+    "edta",
+    "saline",
+    "d5w"
+   ],
+   "scope": "Hóa sinh có dữ liệu hợp lệ",
+   "threshold": 0.9639440178871155,
+   "recallTarget": 0.9,
+   "trainedOn": {
+    "train": 5886,
+    "positives": 140,
+    "validation": 2059,
+    "test": 2039
+   },
+   "syntheticTest": {
+    "tp": 43,
+    "fp": 0,
+    "fn": 3,
+    "tn": 1993,
+    "sensitivity": 0.9347826086956522,
+    "specificity": 1
+   },
+   "paperBasis": "Farrell et al. 2026, Ann Clin Biochem, doi:10.1177/00045632261488751; Spies et al. 2025, Clinical Chemistry, doi:10.1093/clinchem/hvae168",
+   "paperUrl": "https://doi.org/10.1177/00045632261488751"
+  },
+  "heme_wbit_xgb": {
+   "name": "WBIT — CBC",
+   "targets": [
+    "wbit"
+   ],
+   "scope": "CBC với lịch sử ≤90 ngày",
+   "threshold": 0.4977347254753113,
+   "recallTarget": 0.8,
+   "trainedOn": {
+    "train": 2936,
+    "positives": 83,
+    "validation": 1012,
+    "test": 1014
+   },
+   "syntheticTest": {
+    "tp": 29,
+    "fp": 32,
+    "fn": 3,
+    "tn": 950,
+    "sensitivity": 0.90625,
+    "specificity": 0.9674134419551935
+   },
+   "paperBasis": "Graham et al. 2025, Clinical Chemistry, doi:10.1093/clinchem/hvae210",
+   "paperUrl": "https://doi.org/10.1093/clinchem/hvae210"
+  }
+ }
+}
