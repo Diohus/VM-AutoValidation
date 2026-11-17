@@ -11,9 +11,9 @@ Hai file này nằm trong `.gitignore` vì sinh lại được và cho ra kết 
 | | Số lượng |
 |---|---|
 | Người bệnh giả (mã `SBJ-xxxxxx`, không có tên, địa chỉ hay giấy tờ) | 3.000 |
-| Phiếu | 18.975 (train 11.207 · val 3.891 · test 3.847 · kịch bản 30) |
-| Kết quả | 190.862 |
-| Bản ghi QC | khoảng 6.100 (QC sáng 06:30 cho mỗi cặp máy–xét nghiệm; khoảng 0,6% có khoảng QC không đạt) |
+| Phiếu | 18.981 (train 11.207 · val 3.891 · test 3.847 · kịch bản 36) |
+| Kết quả | 190.898 |
+| Bản ghi QC | 6.097 (QC sáng 06:30 cho mỗi cặp máy–xét nghiệm; khoảng 0,6% có khoảng QC không đạt) |
 | Thời gian | 01/03/2026 – 16/11/2026 (ngày 16/11 là hàng đợi "hôm nay") |
 
 ## Mô hình mô phỏng ba tầng
