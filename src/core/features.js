@@ -62,8 +62,8 @@ export function deltaScore(def, test, x, prev, sex) {
  * Data coverage of a model's analytes on one report: which were used and why the others are missing.
  * NOT_ORDERED = type B (not an error); NO_RESULT = type A (ordered, no usable value → rule D01 blocks).
  */
-export function coverage(report, tests) {
-  const cur = currentValues(report);
+export function coverage(report, tests, catalog) {
+  const cur = currentValues(report, catalog);
   const ordered = new Set(report.orderedTests ?? []);
   const missing = [];
   let used = 0;
@@ -86,11 +86,17 @@ export function previousResults(history, measuredAt, windowDays) {
   return prev;
 }
 
-export function currentValues(report) {
+/**
+ * Usable current values. With a catalog, a value in a unit other than the configured one is NOT usable (it would be read
+ * on the wrong scale, e.g. glucose 104 mg/dL as 104 mmol/L): it counts as ordered-without-usable-result (rule D02 blocks).
+ */
+export function currentValues(report, catalog) {
   const v = {};
   for (const r of report.results) {
     const value = parseNumeric(r.value);
-    if (r.status === 'RESULTED' && value != null) v[r.test] = { ...r, value };
+    if (r.status !== 'RESULTED' || value == null) continue;
+    if (catalog && (r.unit ?? '').trim() !== catalog.analytes[r.test]?.unit) continue;
+    v[r.test] = { ...r, value };
   }
   return v;
 }
@@ -99,7 +105,7 @@ export function extractFeatures(report, history, catalog, { windowDays = 90 } = 
   const discipline = report.discipline;
   const tests = MODEL_TESTS[discipline];
   const sex = report.context?.sex === 'F' ? 'F' : 'M';
-  const cur = currentValues(report);
+  const cur = currentValues(report, catalog);
   const measuredAt = report.results.find(r => r.measuredAt)?.measuredAt ?? report.specimen?.collectedAt;
   // Reference time is per analyte (a partially re-run report can mix run times): no look-ahead.
   const prevOf = t => cur[t]?.measuredAt && validTime(cur[t].measuredAt) ? previousResults(history, cur[t].measuredAt, windowDays)[t] : undefined;

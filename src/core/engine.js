@@ -230,6 +230,10 @@ const handlers = {
     return { status: STATUS.PASS, message: `${comparable.length} chỉ số có lịch sử, biến động trong giới hạn RCV minh họa.` };
   },
   history_required_if_abnormal(rule, ctx) {
+    // firstVisitAbnormalPolicy: only ALWAYS_REVIEW runs in the app. MODEL_FLAG_ONLY (hold only when the first-visit model flags)
+    // is evaluated offline in ml/benchmark.py and awaits the department's decision — it would let a model release a hold.
+    const policy = rule.params.firstVisitAbnormalPolicy ?? 'ALWAYS_REVIEW';
+    if (policy !== 'ALWAYS_REVIEW') return { status: STATUS.FAIL, message: `Chính sách "${policy}" chưa được phép chạy (chỉ dùng trong benchmark) — giữ phiếu để người phụ trách xem.` };
     const sex = ctx.report.context?.sex ?? 'M';
     const prev = Object.fromEntries(ctx.usable.map(u => [u.test, prevFor(ctx, u, rule.params.windowDays)]));
     const targets = ctx.usable.filter(u => rule.params.tests.includes(u.test));
@@ -286,15 +290,21 @@ const handlers = {
     }
   },
   model_score(rule, ctx) {
-    const model = ctx.models?.[rule.params.model];
+    // A rule may name one model, or one model per panel (first-visit anomaly detectors are panel-specific).
+    const key = rule.params.modelByPanel ? rule.params.modelByPanel[ctx.report.panel] : rule.params.model;
     if (!ctx.settings.modelEnabled) return { status: STATUS.NOT_APPLICABLE, message: 'Lớp mô hình đang tắt (chỉ chạy rule).' };
-    if (!model) return { status: STATUS.NOT_APPLICABLE, message: 'Chưa có mô hình đã huấn luyện cho nhóm này.' };
-    const res = { key: rule.params.model, ruleCode: rule.code, name: model.name, targets: model.targets, ...scoreReport(ctx.report, ctx.history, ctx.catalog, model) };
+    if (!key) return { status: STATUS.NOT_APPLICABLE, message: `Không có mô hình cấu hình cho bảng xét nghiệm ${ctx.report.panel}.` };
+    const model = ctx.models?.[key];
+    if (!model) return { status: STATUS.NOT_APPLICABLE, message: `Chưa có mô hình "${key}" (models/${key}.json) — phiếu chỉ được đánh giá bằng rule.` };
+    const res = { key, ruleCode: rule.code, name: model.name, kind: model.kind, targets: model.targets, ...scoreReport(ctx.report, ctx.history, ctx.catalog, model) };
     ctx.modelResults.push(res);
-    if (!res.inScope) return { status: STATUS.NOT_APPLICABLE, message: `Ngoài phạm vi mô hình (${model.scope ?? 'cần lịch sử'}) — không có lịch sử để so sánh; mô hình không được dùng thay cho rule.` };
+    const cov = `Dữ liệu: dùng ${res.coverage.used}/${res.coverage.total} chỉ số${res.coverage.missing.length ? ` (thiếu ${res.coverage.missing.map(m => `${m.test}${m.reason === 'NOT_ORDERED' ? ' — không chỉ định' : ' — chưa có kết quả'}`).join(', ')})` : ''}. Lịch sử: ${res.history.label}.`;
+    if (res.status === 'OUT_OF_SCOPE') return { status: STATUS.NOT_APPLICABLE, message: `${res.reason} ${cov}` };
+    if (res.status === 'NOT_EVALUABLE') return { status: STATUS.NOT_EVALUABLE, message: `${res.reason} Phiếu được chuyển người phụ trách xem (thiếu dữ liệu không được coi là đạt). ${cov}` };
     const desc = res.top.map(t => t.label).join('; ');
-    if (res.flagged) return { status: STATUS.FAIL, message: `Điểm phát hiện ${fmt(res.score, 3)} ≥ ngưỡng ${fmt(res.threshold, 3)} (chọn theo recall định trước trên tập validation giả lập). Yếu tố đóng góp: ${desc || '—'}. Nghi ngờ, chưa xác định nguyên nhân.` };
-    return { status: STATUS.PASS, message: `Điểm phát hiện ${fmt(res.score, 3)} < ngưỡng ${fmt(res.threshold, 3)}.` };
+    const how = model.kind === 'knn_anomaly' ? 'ngưỡng = tỷ lệ gắn cờ 5% ở người khám lần đầu của tập validation giả lập' : 'ngưỡng chọn theo recall định trước trên tập validation giả lập';
+    if (res.flagged) return { status: STATUS.FAIL, message: `Điểm ${fmt(res.score, 3)} ≥ ngưỡng ${fmt(res.threshold, 3)} (${how}). Yếu tố đóng góp nhiều nhất: ${desc || '—'}. Nghi ngờ, chưa xác định nguyên nhân. ${cov}` };
+    return { status: STATUS.PASS, message: `Điểm ${fmt(res.score, 3)} < ngưỡng ${fmt(res.threshold, 3)}. ${cov}` };
   }
 };
 

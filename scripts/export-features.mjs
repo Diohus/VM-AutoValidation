@@ -36,7 +36,7 @@ for (const r of ds.reports) {
   const t0 = Math.min(...r.results.map(x => Date.parse(x.measuredAt)).filter(Number.isFinite));
   const priorEver = (index.get(r.subjectToken) ?? []).some(o => o.reportId !== r.reportId && o.discipline === r.discipline
     && o.results.some(x => Date.parse(x.measuredAt) < t0));
-  const cov = coverage(r, MODEL_TESTS[r.discipline]);
+  const cov = coverage(r, MODEL_TESTS[r.discipline], catalog);
   const row = {
     meta_report_id: r.reportId, meta_subject: r.subjectToken, meta_split: r.split, meta_discipline: r.discipline, meta_panel: r.panel,
     meta_ward: r.ward, meta_prior_ever: priorEver ? 1 : 0, meta_coverage_used: cov.used, meta_coverage_total: cov.total,

@@ -20,6 +20,10 @@ Chưa có nghiên cứu nào công bố một hệ thống ML tự ký cho toàn
 
 - **Khoảng trống:** chưa có nghiên cứu ML nào cho đông máu hay vi sinh, và chưa có nghiên cứu nào ghép đủ ba lớp (luật, theo dõi máy, hợp lý theo bệnh nhân) thành một hệ thống.
 
+## Cập nhật áp dụng vào prototype
+
+Prototype không mô phỏng nhầm mẫu (WBIT), vì mẫu có SID định danh. Hai phương pháp trong tổng quan được thử trên dữ liệu giả lập: phát hiện bất thường đa biến cho người khám lần đầu (KNN, theo Farrell 2024, CCLM) và mô hình có giám sát trên nhiễm dịch truyền mô phỏng (theo hướng của Spies 2025, Clinical Chemistry; ở đây dùng LightGBM). Nhiễm EDTA vẫn bắt bằng luật K–Ca. So sánh logistic regression, XGBoost và LightGBM nằm ở `reports/benchmark.json`; đánh giá toàn luồng ở `reports/evaluation-comparison.json`. Đây là chuyển phương pháp để thử tính áp dụng, không tái tạo mô hình hay dữ liệu nghiên cứu, và không dùng để khẳng định hiệu quả lâm sàng.
+
 ## Phạm vi và mức độ đọc
 
 Tôi chỉ đọc được toàn văn ba bài truy cập mở; các bài còn lại nằm sau tường phí nên tôi dựa vào abstract và tài liệu chính thức đi kèm. Mọi con số trong tài liệu lấy từ các nguồn này, không suy đoán.

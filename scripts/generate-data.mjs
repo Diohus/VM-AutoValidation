@@ -24,7 +24,7 @@ const DAY = 86400000, HOUR = 3600000, MIN = 60000;
 const rng = createRng(SEED);
 
 // Error rates are deliberately ENRICHED (≈10–50× real-world) so the models see enough positives.
-// Real-world prevalence is handled at evaluation time by re-weighting (see scripts/train.mjs).
+// Real-world prevalence is handled at evaluation time (PPV at assumed prevalences, see ml/benchmark.py).
 const RATES = {
   CHEM: { analytical_single: 0.01, edta: 0.01, saline_opd: 0.004, saline_ipd: 0.03, d5w_ipd: 0.012, short_sample: 0.003, unit: 0.003, missing: 0.008, delayed: 0.012, hil_missing: 0.006 },
   HEME: { analytical_single: 0.01, plt_clump: 0.02, clot: 0.003, missing: 0.005, delayed: 0.006, variant_lymph: 0.02 }
@@ -532,7 +532,7 @@ function scenarioReports() {
   s = S(12, 'F', 49);
   mk(s, 'CHEM_EXT', '2026-10-20T08:00:00+07:00', { K: 4.1, CA: 2.34, MG: 0.84, ALP: 82 });
   mk(s, 'CHEM_EXT', T('09:20'), { K: 6.0, CA: 1.86, MG: 0.66, ALP: 49 }, { truth: { sampleError: 'edta', details: 'Kịch bản nhiễm EDTA dựng sẵn' },
-    scenario: sc('KB7', 'Kiểu hình nghi nhiễm EDTA → dùng để thử phản hồi', 'MANUAL_REVIEW', 'K↑ Ca↓ Mg↓ ALP↓ so với lần trước. Rule nhất quán K–Ca và mô hình cùng giữ. Thử: chọn "Yêu cầu kiểm tra bổ sung" → "Lấy mẫu lại", ghi lý do; phản hồi được lưu, rule đang chạy KHÔNG đổi.') });
+    scenario: sc('KB7', 'Kiểu hình nghi nhiễm EDTA → dùng để thử phản hồi', 'MANUAL_REVIEW', 'K↑ Ca↓ Mg↓ ALP↓ so với lần trước. Rule nhất quán K–Ca (CHEM-X01) giữ; nhiễm EDTA do rule đảm nhận, không dùng mô hình. Thử: chọn "Yêu cầu kiểm tra bổ sung" → "Lấy mẫu lại", ghi lý do; phản hồi được lưu, rule đang chạy KHÔNG đổi.') });
   // 13. Hemolysis
   s = S(13, 'M', 29);
   mk(s, 'CHEM_EXT', T('08:45'), { K: 5.4, AST: 51, ALT: 25 }, { hil: { H: 180, L: 12, I: 2 }, truth: { sampleError: 'hemolysis', details: 'H=180' },

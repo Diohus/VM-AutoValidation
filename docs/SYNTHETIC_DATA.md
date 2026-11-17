@@ -11,9 +11,9 @@ Hai file này nằm trong `.gitignore` vì sinh lại được và cho ra kết 
 | | Số lượng |
 |---|---|
 | Người bệnh giả (mã `SBJ-xxxxxx`, không có tên, địa chỉ hay giấy tờ) | 3.000 |
-| Phiếu | 18.975 (train 11.207 · val 3.891 · test 3.847 · kịch bản 30) |
-| Kết quả | 190.862 |
-| Bản ghi QC | khoảng 6.100 (QC sáng 06:30 cho mỗi cặp máy–xét nghiệm; khoảng 0,6% có khoảng QC không đạt) |
+| Phiếu | 19.004 (train 11.249 · val 3.867 · test 3.852 · kịch bản 36) |
+| Kết quả | 191.372 |
+| Bản ghi QC | 6.097 (QC sáng 06:30 cho mỗi cặp máy–xét nghiệm; khoảng 0,6% có khoảng QC không đạt) |
 | Thời gian | 01/03/2026 – 16/11/2026 (ngày 16/11 là hàng đợi "hôm nay") |
 
 ## Mô hình mô phỏng ba tầng
@@ -55,6 +55,16 @@ Tập train/val/test được chia **theo người bệnh trước khi tiêm l�
 - `reviewer.action`: **người duyệt mô phỏng có nhiễu**, ví dụ chỉ giữ 50% số ca lỗi phân tích đơn chỉ số và giữ nhầm 5% số ca sạch.
 
 Mục đích là minh họa rằng "người phụ trách đã duyệt" không đồng nghĩa "kết quả đúng". Mô hình được huấn luyện trên nhãn thật của bản mô phỏng, không dùng nhãn người duyệt.
+
+## Mô hình huấn luyện trên dữ liệu này
+
+Mô hình chạy trong app (`models/*.json`) được huấn luyện **ngoại tuyến bằng Python** trên bộ benchmark riêng (`npm run bench:data`: 10.000 người bệnh, seed 20261117), không phải trên bộ demo 3.000 người bệnh. Bộ demo vì vậy là dữ liệu độc lập để kiểm tra toàn luồng (`scripts/evaluate-comparison.mjs`). Chi tiết: [MODEL_REDESIGN_PLAN.md](MODEL_REDESIGN_PLAN.md), `reports/benchmark.json`.
+
+- **Lẫn dịch truyền (NaCl 0,9% / glucose 5%), hóa sinh:** LightGBM. Hướng tiếp cận có giám sát trên nhiễm mô phỏng tham khảo Spies 2025 (Clinical Chemistry) theo tổng quan nghiên cứu.
+- **Bất thường đa chỉ số ở người khám lần đầu:** KNN, ngưỡng gắn cờ 5%, theo Farrell 2024 (CCLM) trong tổng quan.
+- **Không dùng mô hình:** nhiễm EDTA (rule K–Ca đã bắt hết trên dữ liệu giả lập), lỗi phân tích đơn chỉ số (quá nhiều báo động giả), nhầm mẫu WBIT (ngoài phạm vi).
+
+Đây là chuyển phương pháp để thử tính áp dụng trên dữ liệu giả lập, không tái tạo mô hình hay kết quả của các bài báo.
 
 ## Giới hạn
 

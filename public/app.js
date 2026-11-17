@@ -200,12 +200,18 @@ function allChecks(ev) {
 
 function modelsBlock(ev) {
   if (!ev.modelEnabled) return '<p class="muted">Lớp mô hình đang tắt — quyết định chỉ dựa trên rule.</p>';
-  if (!ev.models?.length) return '<p class="muted">Không có mô hình cho nhóm này.</p>';
-  return ev.models.map(m => `<div class="model-row"><div><strong>${esc(m.name)}</strong><div class="muted small mono">${esc(m.version)}</div></div>
-    ${!m.inScope ? '<div class="muted small">Không chạy: không có lịch sử ≤ 90 ngày để so sánh.</div>' : `<div class="meter-wrap">
-    <div class="meter" role="img" aria-label="Điểm ${num(m.score)}, ngưỡng ${num(m.threshold)}"><span class="fill ${m.flagged ? 'hot' : ''}" style="width:${Math.min(100, m.score * 100)}%"></span><span class="thr" style="left:${m.threshold * 100}%"></span></div>
-    <div class="small">Điểm <b>${num(m.score)}</b> / ngưỡng ${num(m.threshold)} — ${m.flagged ? '<b>giữ thêm để xem</b>' : 'không gắn cờ'}${m.flagged && m.top.length ? `<br><span class="muted">Do: ${m.top.map(t => esc(t.label)).join('; ')}</span>` : ''}</div></div>`}</div>`).join('')
-    + '<p class="muted small">Điểm phát hiện trên dữ liệu giả lập, không phải xác suất an toàn. Mô hình chỉ có thể giữ thêm phiếu, không chặn và không tự duyệt.</p>';
+  if (!ev.models?.length) return '<p class="muted">Không có mô hình cho nhóm này (hoặc chưa có models/*.json — đang chỉ chạy rule).</p>';
+  const covTxt = c => `Dữ liệu: dùng <b>${c.used}/${c.total}</b> chỉ số${c.missing.length ? ` <span class="muted">(thiếu: ${c.missing.map(m => `${esc(m.test)} — ${m.reason === 'NOT_ORDERED' ? 'không chỉ định' : 'chưa có kết quả'}`).join(', ')})</span>` : ''}`;
+  return ev.models.map(m => {
+    const scale = m.kind === 'knn_anomaly' ? 2 * m.threshold : 1; // KNN distance is not in [0,1]: threshold drawn at the middle
+    const head = `<div><strong>${esc(m.name)}</strong><div class="muted small mono">${esc(m.version)}</div></div>`;
+    const meta = `<div class="small">${covTxt(m.coverage)} · Lịch sử: ${esc(m.history.label)}</div>`;
+    if (m.status !== 'SCORED') return `<div class="model-row">${head}<div class="small"><b>${m.status === 'NOT_EVALUABLE' ? 'Không đánh giá được' : 'Không áp dụng'}</b> — ${esc(m.reason)}</div>${meta}</div>`;
+    const why = m.top.length ? `<br><span class="muted">Yếu tố ảnh hưởng nhiều nhất: ${m.top.map(t => `${t.direction === 'DOWN' ? '↓' : '↑'} ${esc(t.label)}${t.value != null ? ` (${num(t.value, 2)})` : ''}`).join('; ')}</span><br><span class="muted small">↑ làm tăng điểm nghi ngờ, ↓ làm giảm.</span>` : '<br><span class="muted small">Không có yếu tố nào làm đổi điểm so với mức nền.</span>';
+    return `<div class="model-row">${head}<div class="meter-wrap">
+      <div class="meter" role="img" aria-label="Điểm ${num(m.score)}, ngưỡng ${num(m.threshold)}"><span class="fill ${m.flagged ? 'hot' : ''}" style="width:${Math.min(100, m.score / scale * 100)}%"></span><span class="thr" style="left:${Math.min(100, m.threshold / scale * 100)}%"></span></div>
+      <div class="small">Điểm <b>${num(m.score)}</b> / ngưỡng ${num(m.threshold)} — ${m.flagged ? '<b>giữ thêm để xem</b>' : 'không gắn cờ'}${why}</div>${meta}</div></div>`;
+  }).join('') + '<p class="muted small">Điểm phát hiện trên dữ liệu giả lập, không phải xác suất an toàn. Mô hình chỉ có thể giữ thêm phiếu, không chặn và không tự duyệt. Thiếu dữ liệu then chốt → "không đánh giá được", không bao giờ là "đạt".</p>';
 }
 
 function contextBlock(r) {
@@ -443,41 +449,50 @@ function wireTips(root) {
 
 async function renderEval() {
   const v = $('#view-eval');
-  const { evaluation: E } = await api('/api/evaluation');
+  const { evaluation: E, stale, models: loaded } = await api('/api/evaluation');
+  if (!E) { v.innerHTML = '<div class="notice">Chưa có báo cáo đánh giá (reports/evaluation-comparison.json). Chạy <span class="mono">node scripts/evaluate-comparison.mjs</span>.</div>'; return; }
   const key = [
     ['autoApproveRate', 'Đủ điều kiện tự duyệt', 'cao hơn = bớt việc duyệt tay'],
     ['falsePassPerAutoApproved', 'Cho qua nhầm / phiếu tự duyệt', 'thấp hơn = an toàn hơn'],
-    ['missedSampleErrors', 'Lỗi mẫu bị cho qua', 'thấp hơn = an toàn hơn'],
+    ['missedSampleErrors', 'Lỗi mẫu/phân tích bị cho qua', 'thấp hơn = an toàn hơn'],
     ['holdCleanOther', 'Báo động giả', 'phiếu không lỗi bị giữ bởi delta/nhất quán/mô hình']
   ];
-  const more = [['missedAmongNeedsReview', 'Ca cần xem xét bị cho qua'], ['unnecessaryHold', 'Giữ phiếu không lỗi (tổng)'], ['holdCleanPolicyOnly', '· do rule chính sách'], ['blockedRate', 'Tỷ lệ bị chặn'], ['agreementWithSimulatedReviewer', 'Trùng người duyệt mô phỏng']];
+  const more = [['missedAmongNeedsReview', 'Ca cần xem xét bị cho qua'], ['unnecessaryHold', 'Giữ phiếu không lỗi (tổng)'], ['holdCleanPolicyOnly', '· do rule chính sách'], ['blockedRate', 'Tỷ lệ bị chặn']];
   const cell = r => `${pct(r.value)}<div class="muted small">${r.k}/${r.n}</div>`;
+  const ci = r => `${pct(r.value)} <span class="muted small">(${pct(r.ci95[0])}–${pct(r.ci95[1])})</span>`;
+  const series = [{ key: 'ruleOnly', label: 'Chỉ rule', color: '--series-1' }, { key: 'ruleModel', label: 'Rule + mô hình', color: '--series-2' }];
   const disc = (k, label) => {
-    const D = E.disciplines[k];
-    const types = Object.entries(D.perErrorType);
-    return `<div class="card"><h3>${label}</h3><p class="muted small">Tập test: ${D.ruleOnly.reports} phiếu, người bệnh không xuất hiện khi huấn luyện.</p>
-      <div class="tablewrap"><table class="results"><thead><tr><th>Chỉ số</th><th class="num">Chỉ rule</th><th class="num">Rule + mô hình</th></tr></thead><tbody>
-      ${key.map(([m, l, n]) => `<tr><td>${l}<div class="muted small">${n}</div></td><td class="num">${cell(D.ruleOnly[m])}</td><td class="num">${cell(D.ruleModel[m])}</td></tr>`).join('')}</tbody></table></div>
-      ${D.variants ? `<h4 class="sub-h">Ngưỡng chung vs ngưỡng cá nhân</h4><div class="tablewrap"><table class="results"><thead><tr><th>Cấu hình</th><th class="num">Tự duyệt</th><th class="num">Lỗi mẫu bị cho qua</th><th class="num">Báo động giả</th></tr></thead><tbody>
-        ${D.variants.map(x => `<tr><td>${{ OFF: 'Ngưỡng chung', TIGHTEN: 'Cá nhân: siết', ADAPT: 'Cá nhân: siết + nới' }[x.personalMode]}${x.modelEnabled ? ' + mô hình' : ''}</td><td class="num">${pct(x.autoApproveRate.value)}</td><td class="num">${pct(x.missedSampleErrors.value)}</td><td class="num">${pct(x.holdCleanOther.value)}</td></tr>`).join('')}</tbody></table></div>` : ''}
-      <h4 class="sub-h">Tỷ lệ phát hiện theo loại lỗi</h4>
-      ${barChart(types.map(([t, x]) => ({ label: ERR_TXT[t] ?? t, n: x.n, values: [x.ruleOnlyCaught.value, x.ruleModelCaught.value], counts: [x.ruleOnlyCaught.k, x.ruleModelCaught.k] })), [{ name: 'Chỉ rule', color: '--series-1' }, { name: 'Rule + mô hình', color: '--series-2' }])}
-      ${fold('Thêm chỉ số & khoảng tin cậy', `<table class="results"><thead><tr><th>Chỉ số</th><th class="num">Chỉ rule</th><th class="num">Rule + mô hình</th></tr></thead><tbody>${[...key.map(([m, l]) => [m, l]), ...more].map(([m, l]) => `<tr><td>${l}</td><td class="num">${pct(D.ruleOnly[m].value)} <span class="muted small">(${pct(D.ruleOnly[m].ci95[0])}–${pct(D.ruleOnly[m].ci95[1])})</span></td><td class="num">${pct(D.ruleModel[m].value)} <span class="muted small">(${pct(D.ruleModel[m].ci95[0])}–${pct(D.ruleModel[m].ci95[1])})</span></td></tr>`).join('')}</tbody></table>
-        <table class="results"><thead><tr><th>Loại lỗi</th><th class="num">n</th><th class="num">Có lịch sử</th><th class="num">Chỉ rule</th><th class="num">Rule + mô hình</th></tr></thead><tbody>${types.map(([t, x]) => `<tr><td>${esc(ERR_TXT[t] ?? t)}</td><td class="num">${x.n}</td><td class="num">${x.withHistory}</td><td class="num">${pct(x.ruleOnlyCaught.value)}</td><td class="num">${pct(x.ruleModelCaught.value)}</td></tr>`).join('')}</tbody></table>`)}
+    const D = E.disciplines[k], types = Object.entries(D.perErrorType);
+    return `<div class="card"><h3>${label}</h3><p class="muted small">Tập test: ${D.reports} phiếu. ${esc(E.endToEndNote)}</p>
+      <div class="tablewrap"><table class="results"><thead><tr><th>Chỉ số</th>${series.map(x => `<th class="num">${x.label}</th>`).join('')}</tr></thead><tbody>${key.map(([m, l, n]) => `<tr><td>${l}<div class="muted small">${n}</div></td>${series.map(x => `<td class="num">${cell(D[x.key][m])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+      <h4 class="sub-h">Ngưỡng chung vs ngưỡng cá nhân</h4><div class="tablewrap"><table class="results"><thead><tr><th>Cấu hình</th><th class="num">Tự duyệt</th><th class="num">Lỗi bị cho qua</th><th class="num">Báo động giả</th></tr></thead><tbody>
+        ${D.variants.map(x => `<tr><td>${{ OFF: 'Ngưỡng chung', TIGHTEN: 'Cá nhân: siết', ADAPT: 'Cá nhân: siết + nới' }[x.personalMode]}${x.modelEnabled ? ' + mô hình' : ''}</td><td class="num">${pct(x.autoApproveRate.value)}</td><td class="num">${pct(x.missedSampleErrors.value)}</td><td class="num">${pct(x.holdCleanOther.value)}</td></tr>`).join('')}</tbody></table></div>
+      <h4 class="sub-h">Tỷ lệ phát hiện theo loại lỗi</h4><p class="muted small">n là số phiếu mang loại lỗi đó (một phiếu có thể có nhiều lỗi).</p>
+      ${barChart(types.map(([t, x]) => ({ label: ERR_TXT[t] ?? t, n: x.n, values: [x.ruleOnlyCaught.value, x.ruleModelCaught.value], counts: [x.ruleOnlyCaught.k, x.ruleModelCaught.k] })), series.map(x => ({ name: x.label, color: x.color })))}
+      ${fold('Thêm chỉ số, khoảng tin cậy, mức dùng mô hình', `<table class="results"><thead><tr><th>Chỉ số</th>${series.map(x => `<th class="num">${x.label}</th>`).join('')}</tr></thead><tbody>${[...key.map(([m, l]) => [m, l]), ...more].map(([m, l]) => `<tr><td>${l}</td>${series.map(x => `<td class="num">${ci(D[x.key][m])}</td>`).join('')}</tr>`).join('')}</tbody></table>
+        <table class="results"><thead><tr><th>Mô hình</th><th class="num">Chấm điểm</th><th class="num">Không đánh giá được</th><th class="num">Ngoài phạm vi</th><th class="num">Gắn cờ</th><th class="num">Giữ thêm (rule cho qua)</th></tr></thead><tbody>${Object.entries(D.modelUse).map(([m, u]) => `<tr><td class="mono small">${esc(m)}</td><td class="num">${u.scored}</td><td class="num">${u.notEvaluable}</td><td class="num">${u.outOfScope}</td><td class="num">${u.flagged}</td><td class="num">${u.flaggedRuleAuto}</td></tr>`).join('')}</tbody></table>`)}
     </div>`;
   };
-  const det = Object.values(E.detectors).map(d => `<div class="card"><h3>${esc(d.name)}</h3>
-    <dl class="kv"><dt>Mục tiêu</dt><dd>${d.targets.map(t => esc(ERR_TXT[t] ?? t)).join(', ')}</dd><dt>Phạm vi</dt><dd>${esc(d.scope)}</dd>
-    <dt>Độ nhạy (test)</dt><dd><b>${pct(d.test.sensitivity.value)}</b> <span class="muted small">${d.test.tp}/${d.test.tp + d.test.fn}</span></dd><dt>Độ đặc hiệu</dt><dd>${pct(d.test.specificity.value)}</dd>
-    <dt>PR-AUC (test)</dt><dd>${num(d.test.prAuc)}</dd><dt>PPV nếu lỗi thật 0,1%</dt><dd>${pct(d.ppvAtAssumedPrevalence[1].ppv, 2)}</dd></dl>
-    ${fold('Chi tiết', `<p class="small">${esc(d.thresholdSelection)}</p><dl class="kv"><dt>Train</dt><dd>${d.train.n} phiếu · ${d.train.positives} dương tính</dd><dt>Val PR-AUC / ROC-AUC</dt><dd>${num(d.validation.prAuc)} / ${num(d.validation.rocAuc)}</dd><dt>Test ROC-AUC</dt><dd>${num(d.test.rocAuc)}</dd><dt>Tỷ lệ gắn cờ</dt><dd>${pct(d.test.flagRate.value)}</dd>${d.ppvAtAssumedPrevalence.map(p => `<dt>PPV nếu lỗi thật ${pct(p.prevalence, 2)}</dt><dd>${pct(p.ppv, 2)}</dd>`).join('')}</dl><p class="muted small">${esc(d.ppvNote)}</p>`)}</div>`).join('');
-  v.innerHTML = `<div class="notice">Kết quả trên <b>dữ liệu giả lập</b> (tỷ lệ lỗi được làm giàu), không phải hiệu năng thật. "Mô hình" ở đây là các bộ phát hiện lỗi cục bộ (logistic regression huấn luyện trên dữ liệu giả lập, không gọi API ngoài). Mô hình chỉ được giữ thêm, nên "Rule + mô hình" không thể tự duyệt nhiều hơn "Chỉ rule" — điều cần chứng minh là bắt thêm lỗi với mức tăng việc duyệt tay chấp nhận được.</div>
-    <div class="grid-2">${disc('CHEM', 'Hóa sinh')}${disc('HEME', 'Huyết học (CBC)')}</div>
-    <h3 class="section-h">Các bộ phát hiện (mỗi loại lỗi một mô hình)</h3><div class="grid-3">${det}</div>
+  const B = E.benchmark;
+  const algoName = { logreg: 'Logistic regression', xgboost: 'XGBoost', lightgbm: 'LightGBM', gaussian: 'Gaussian đa biến', knn: 'KNN', ocsvm: 'One-class SVM' };
+  const brow = (name, r) => r ? `<tr><td>${name}</td><td class="num">${num(r.prAuc)}</td><td class="num">${pct(r.sensitivity?.value)}</td><td class="num">${r.addedCatchOfRuleMissed ? `${r.addedCatchOfRuleMissed.k}/${r.addedCatchOfRuleMissed.n}` : '—'}</td><td class="num">${r.extraFalseAlarmOnCleanRuleAuto ? pct(r.extraFalseAlarmOnCleanRuleAuto.value) : '—'}</td></tr>` : '';
+  const bhead = '<thead><tr><th>Thuật toán</th><th class="num">PR-AUC</th><th class="num">Độ nhạy</th><th class="num">Bắt thêm (rule bỏ sót)</th><th class="num">Báo động giả thêm</th></tr></thead>';
+  const bench = !B ? '' : `<h3 class="section-h">Benchmark ngoại tuyến (Python): so sánh thuật toán</h3>
+    <div class="notice">${esc(B.disclaimer)} ${esc(B.data.note)} Mô hình đang nạp: ${loaded.length ? loaded.map(m => `<span class="mono small">${esc(m.key)}</span>`).join(', ') : '<b>không có — app đang chạy chỉ bằng rule</b>'}. Không triển khai: ${Object.entries(B.notDeployed).map(([k, t]) => `<span class="mono small">${esc(k)}</span> (${esc(t)})`).join('; ')}</div>
+    <div class="grid-2">${Object.entries(B.detectors).map(([k, d]) => `<div class="card"><h3>${esc(d.name)}</h3><p class="muted small">Test: ${d.split.test.n} phiếu, ${d.split.test.positives} ca dương tính. Chọn theo CV trên train: <b>${algoName[B.chosenAlgorithmByTrainCvAp[k]]}</b>.</p>
+      <div class="tablewrap"><table class="results">${bhead}<tbody>${Object.entries(d.algorithms).map(([al, r]) => brow(algoName[al], r)).join('')}</tbody></table></div></div>`).join('')}</div>
+    <h3 class="section-h">Phát hiện bất thường — người khám lần đầu (ngưỡng gắn cờ 5%)</h3>
+    <div class="grid-3">${Object.entries(B.firstVisitAnomaly).map(([pn, d]) => `<div class="card"><h3>${esc(pn)}</h3><p class="muted small">${d.testFirstVisit} phiếu không có lịch sử ≤90 ngày, ${d.testPositives} ca nhiễm mẫu/lỗi phân tích.</p>
+      <div class="tablewrap"><table class="results">${bhead}<tbody>${Object.entries(d.models).map(([al, r]) => brow(algoName[al], r)).join('')}</tbody></table></div></div>`).join('')}</div>
+    ${fold('Chính sách người khám lần đầu có kết quả bất thường (đề xuất, chờ khoa)', `<p class="small">Mặc định <b>ALWAYS_REVIEW</b> (luôn chuyển người duyệt). <b>MODEL_FLAG_ONLY</b> chỉ chạy trong benchmark, không có trên giao diện.</p>
+      <table class="results"><thead><tr><th>Chính sách</th><th class="num">Tự duyệt</th><th class="num">Lỗi bị cho qua</th></tr></thead><tbody>${Object.entries(B.firstVisitPolicy.policies).map(([nm, x]) => `<tr><td>${nm}</td><td class="num">${cell(x.autoApprove)}</td><td class="num">${cell(x.missedSampleErrors)}</td></tr>`).join('')}</tbody></table>
+      <p class="muted small">MODEL_FLAG_ONLY thả thêm ${B.firstVisitPolicy.releasedByModelFlagOnly.n} phiếu, trong đó ${B.firstVisitPolicy.releasedByModelFlagOnly.withSampleError} phiếu có lỗi.</p>`)}`;
+  const staleNote = stale ? `<div class="notice"><b>Báo cáo này không khớp với mô hình/rule đang chạy</b> (đã đổi models/ hoặc config/ sau khi tính). Số liệu "Rule + mô hình" có thể sai; chạy lại <span class="mono">npm run evaluate</span>. Mô hình đang nạp: ${loaded.length ? loaded.map(m => esc(m.key)).join(', ') : 'không có (chỉ rule)'}.</div>` : '';
+  v.innerHTML = `${staleNote}<div class="notice">${esc(E.disclaimer)} Mô hình chỉ được phép giữ thêm phiếu, không thể vượt qua điều kiện chặn hay tự duyệt — điều cần chứng minh là bắt thêm lỗi với mức tăng việc duyệt tay chấp nhận được.</div>
+    <div class="grid-2">${disc('CHEM', 'Hóa sinh')}${disc('HEME', 'Huyết học (CBC)')}</div>${bench}
     ${fold('Định nghĩa chỉ số', `<ul class="plain">${Object.entries(E.definitions).map(([k, d]) => `<li><span class="mono small">${k}</span> — ${esc(d)}</li>`).join('')}</ul>`)}`;
   wireTips(v);
 }
-
 // ---------------- feedback / audit ----------------
 async function renderFeedback() {
   const fb = await api('/api/feedback');

@@ -87,9 +87,13 @@ export function describeRule(rule, { catalog, discipline, models = [] }) {
       };
     }
     case 'model_score': {
-      const m = models.find(x => x.key === p.model);
-      return { when: `Điểm của mô hình <b>${esc(m?.name ?? p.model)}</b> ≥ <b>${m ? n(Number(m.threshold).toFixed(3)) : '—'}</b>.`,
-        extra: `Mô hình <b>chỉ được giữ thêm</b>: không thể chặn, không thể vượt qua điều kiện chặn và không tự duyệt. ${m?.scope ? 'Phạm vi: ' + esc(m.scope) + '.' : ''}` };
+      const keys = p.modelByPanel ? Object.entries(p.modelByPanel) : [[null, p.model]];
+      const ms = keys.map(([panel, k]) => ({ panel, k, m: models.find(x => x.key === k) }));
+      const thr = ms.map(({ panel, k, m }) => `${panel ? esc(panel) + ': ' : ''}<b>${esc(m?.name ?? k)}</b> ≥ <b>${m ? n(Number(m.threshold).toFixed(3)) : '— (chưa có mô hình → chỉ chạy rule)'}</b>`).join('; ');
+      const m0 = ms[0]?.m;
+      return { when: `Điểm của mô hình ${thr}.`,
+        extra: `Mô hình <b>chỉ được giữ thêm</b>: không thể chặn, không thể vượt qua điều kiện chặn và không tự duyệt. ${m0?.scopeNote ? 'Phạm vi: ' + esc(m0.scopeNote) : m0?.scope === 'noHistory90d' ? 'Chỉ chạy khi người bệnh không có lịch sử ≤90 ngày.' : ''}`,
+        missing: `Thiếu dữ liệu then chốt của mô hình${m0?.keyTests?.length ? ` (${m0.keyTests.map(t => esc(catalog.analytes[t]?.name ?? t)).join(', ')})` : ''} → <b>không đánh giá được</b> (hiển thị rõ, không phải "đạt"). Chỉ số không được chỉ định không bị điền giá trị.` };
     }
     default:
       return { when: esc(rule.reason) };

@@ -1,6 +1,6 @@
 {
   "rulesetId": "CHEM-AV",
-  "version": "chem-demo-1.1.0",
+  "version": "chem-demo-1.3.0",
   "discipline": "CHEM",
   "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
   "approvedBy": null,
@@ -191,7 +191,8 @@
           "NA",
           "CA"
         ],
-        "windowDays": 365
+        "windowDays": 365,
+        "firstVisitAbnormalPolicy": "ALWAYS_REVIEW"
       }
     },
     {
@@ -287,11 +288,27 @@
       "stage": "MODEL",
       "priority": 81,
       "onFail": "REVIEW",
-      "onNotEvaluable": "IGNORE",
-      "name": "Mô hình phát hiện nhiễm mẫu (EDTA / dịch truyền) — chỉ được giữ thêm",
-      "reason": "Tổ hợp chỉ số gợi ý nhiễm EDTA hoặc lẫn dịch truyền. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "onNotEvaluable": "REVIEW",
+      "name": "Mô hình phát hiện lẫn dịch truyền (NaCl 0,9% / glucose 5%) — chỉ được giữ thêm",
+      "reason": "LightGBM trên tổ hợp chỉ số (Na − Cl, glucose, mức pha loãng so với lần trước khi có). Cần Na, Cl, glucose; thiếu → không đánh giá được. Chỉ có quyền chuyển MANUAL_REVIEW. Nhiễm EDTA do rule CHEM-X01 đảm nhận (không dùng mô hình).",
       "params": {
-        "model": "chem_contam"
+        "model": "chem_ivfluid"
+      }
+    },
+    {
+      "code": "CHEM-M03",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 82,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "REVIEW",
+      "name": "Phát hiện bất thường đa chỉ số — người khám lần đầu (KNN) — chỉ được giữ thêm",
+      "reason": "Chỉ chạy khi không có lịch sử ≤90 ngày. Khoảng cách tới các phiếu thường quy gần nhất (theo Farrell 2024), ngưỡng gắn cờ 5%. Nhắm tới nhiễm mẫu và lỗi phân tích; bệnh thật cũng có thể bị gắn cờ. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "params": {
+        "modelByPanel": {
+          "CHEM_BASIC": "fv_chem_basic",
+          "CHEM_EXT": "fv_chem_ext"
+        }
       }
     }
   ]

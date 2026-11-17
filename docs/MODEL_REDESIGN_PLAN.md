@@ -106,3 +106,10 @@ Cho từng bộ × thuật toán, trên test:
 | 9 | 5% chưa phải ngân sách báo động thêm. | Quantile 95% riêng từng panel trên val; báo tỷ lệ gắn cờ thực tế ở test và phần tăng thêm trên phiếu rule-AUTO. Tách "lần đầu thật" và "không có lịch sử ≤90 ngày". |
 | 10 | `analytical_single` dễ tạo benchmark tự đúng; HCT nằm ngoài `MODEL_TESTS`. | Độ lệch rộng 8–60% (gồm lệch nhỏ), báo recall theo mức lệch. Train/val không tiêm vào ALT, MG, PLT, RDW; test tiêm vào mọi chỉ số → báo recall riêng trên chỉ số chưa thấy. Thêm HCT vào `MODEL_TESTS`. Báo `qc_window` riêng, không gộp vào recall. |
 | 11 | Bản xuất cây cho JS thiếu thông tin. | Dùng XGBoost JSON đầy đủ (base_score, objective, nhánh thiếu). Không áp `Math.fround` đồng loạt cho LightGBM. OCSVM xuất cả intercept/offset. KNN benchmark trên đúng tập con sẽ triển khai. Test so khớp gồm biên split, 0, thiếu, sát ngưỡng. |
+
+## 10. Bước 3 — đã triển khai (17/11/2026)
+- Gộp `origin/main` (PR #2). Gỡ `chem_wbit_xgb`, `heme_wbit_xgb`, `chem_contam_xgb` và mọi LR cũ; dùng chung, tổng quát hóa bộ chấm điểm cây JSON của PR #2 cho XGBoost (so sánh float32) và LightGBM (missing type), có giải thích Saabas.
+- Mô hình triển khai: `chem_ivfluid` (LightGBM), `fv_chem_basic` / `fv_chem_ext` / `fv_cbc` (KNN, chỉ khi không có lịch sử ≤90 ngày). EDTA: rule. Lỗi phân tích đơn chỉ số: không triển khai.
+- `ml/train_runtime.py` huấn luyện đúng cấu hình đã benchmark (assert cùng PR-AUC val và cùng ngưỡng) và xuất `tests/fixtures/model-parity.json`; `tests/model.test.js` kiểm điểm JS khớp thư viện.
+- Server không gọi Python; thiếu mô hình → chỉ rule, ghi rõ. Báo cáo đánh giá duy nhất: `reports/evaluation-comparison.json` (toàn luồng trên bộ demo độc lập + tóm tắt benchmark), có dấu vân tay để phát hiện báo cáo cũ.
+- `firstVisitAbnormalPolicy` trong CHEM-H02: app chỉ chạy `ALWAYS_REVIEW`; giá trị khác vẫn giữ phiếu. `MODEL_FLAG_ONLY` chỉ có trong benchmark (đề xuất chờ khoa).

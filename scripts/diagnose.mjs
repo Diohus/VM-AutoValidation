@@ -3,12 +3,13 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { evaluateReport } from '../src/core/engine.js';
 import { buildHistoryIndex, historyFor } from '../src/core/history.js';
+import { loadModels } from '../src/core/load-models.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const R = p => JSON.parse(readFileSync(root + p, 'utf8'));
 const catalog = R('config/analytes.json'), rulesets = { CHEM: R('config/rules.chem.json'), HEME: R('config/rules.heme.json') };
 const ds = R('data/synthetic/dataset.json');
-const models = Object.fromEntries(['chem_contam'].filter(k => existsSync(root + `models/${k}.json`)).map(k => [k, R(`models/${k}.json`)]));
+const models = loadModels(root + 'models');
 const idx = buildHistoryIndex(ds.reports);
 const cnt = {}, tests = {};
 let n = 0;

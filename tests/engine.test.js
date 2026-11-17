@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { evaluateReport, DECISIONS } from '../src/core/engine.js';
 import { extractFeatures, coverage } from '../src/core/features.js';
-import { trainLogReg, scoreFeatures } from '../src/core/model.js';
 
 const read = p => JSON.parse(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
 const catalog = read('config/analytes.json');
@@ -110,21 +109,64 @@ test('instrument flags: blocking vs review-only vs unknown flag', () => {
   assert.equal(unk.decision, DECISIONS.REVIEW, 'unconfigured flags are never ignored');
 });
 
+// Stub tree models: one leaf, the margin is fixed by baseMargin. Keys are read FROM THE RULESET, so these tests
+// always exercise the real model branch (regression: a renamed model key silently turned the safety test into rule-only).
+const IV = rulesets.CHEM.rules.find(r => r.code === 'CHEM-M02').params.model;
+const FV = rulesets.CHEM.rules.find(r => r.code === 'CHEM-M03').params.modelByPanel;
+const stub = (key, margin, extra = {}) => ({ key, kind: 'tree_ensemble', name: 'stub', version: 't', features: ['hist_avail'], baseMargin: margin,
+  trees: [[{ leaf: 0, v: 0 }]], threshold: 0.5, keyTests: ['NA', 'CL', 'GLU'], scope: 'all', ...extra });
+
 test('model can escalate to review but can never lift a block or approve', () => {
-  const always = { key: 'chem_contam', name: 'test', version: 't', features: ['hist_avail'], mean: [0], sd: [1], weights: [0], bias: 20, threshold: 0.5 };
-  const never = { ...always, bias: -20 };
-  assert.equal(run(report('CHEM_EXT'), { models: { chem_contam: always } }).decision, DECISIONS.REVIEW);
+  const always = stub(IV, 20), never = stub(IV, -20);
+  const up = run(report('CHEM_EXT'), { models: { [IV]: always } });
+  assert.equal(check(up, 'CHEM-M02').status, 'FAIL', 'the model branch really ran');
+  assert.equal(up.decision, DECISIONS.REVIEW);
   const blocked = report('CHEM_EXT'); blocked.specimen.hil = null;
-  assert.equal(run(blocked, { models: { chem_contam: never } }).decision, DECISIONS.BLOCKED);
-  assert.equal(run(report('CHEM_BASIC', { K: 5.6 }), { models: { chem_contam: never } }).decision, DECISIONS.REVIEW);
-  assert.equal(run(report('CHEM_EXT'), { models: { chem_contam: always }, settings: { modelEnabled: false } }).decision, DECISIONS.AUTO);
+  assert.equal(run(blocked, { models: { [IV]: never } }).decision, DECISIONS.BLOCKED);
+  const held = run(report('CHEM_BASIC', { K: 5.6 }), { models: { [IV]: never } });
+  assert.equal(check(held, 'CHEM-M02').status, 'PASS');
+  assert.equal(held.decision, DECISIONS.REVIEW, 'a low model score never releases a rule hold');
+  assert.equal(run(report('CHEM_EXT'), { models: { [IV]: always }, settings: { modelEnabled: false } }).decision, DECISIONS.AUTO);
 });
 
-test('history-scoped model is not applied without history', () => {
-  const m = { key: 'chem_contam', name: 'w', version: 't', requiresHistory: true, features: ['hist_avail'], mean: [0], sd: [1], weights: [0], bias: 20, threshold: 0.5 };
-  const ev = run(report('CHEM_EXT'), { models: { chem_contam: m } });
+test('missing model file → rules only, said explicitly (no silent pass, no training at runtime)', () => {
+  const ev = run(report('CHEM_EXT'), { models: {} });
   assert.equal(check(ev, 'CHEM-M02').status, 'NOT_APPLICABLE');
-  assert.equal(ev.decision, DECISIONS.AUTO);
+  assert.match(check(ev, 'CHEM-M02').message, /chỉ được đánh giá bằng rule/);
+});
+
+test('missing key inputs → NOT_EVALUABLE (never PASS), with data coverage shown', () => {
+  const edtaLike = stub(IV, -20, { keyTests: ['K', 'CA'] });          // CHEM_BASIC has no Ca ordered
+  const ev = run(report('CHEM_BASIC'), { models: { [IV]: edtaLike } });
+  const c = check(ev, 'CHEM-M02');
+  assert.equal(c.status, 'NOT_EVALUABLE');
+  assert.match(c.message, /CA/);
+  assert.match(c.message, /dùng 6\/12 chỉ số/);
+  assert.match(c.message, /không chỉ định/);
+  const m = ev.models.find(x => x.key === IV);
+  assert.equal(m.status, 'NOT_EVALUABLE'); assert.equal(m.score, null); assert.equal(m.flagged, false);
+});
+
+test('first-visit model runs only without history ≤90 days; with history it is out of scope', () => {
+  const fv = stub(FV.CHEM_EXT, 20, { scope: 'noHistory90d', keyTests: [] });
+  const first = run(report('CHEM_EXT'), { models: { [FV.CHEM_EXT]: fv } });
+  assert.equal(check(first, 'CHEM-M03').status, 'FAIL');
+  assert.match(check(first, 'CHEM-M03').message, /chưa có lịch sử/);
+  const prev = [{ test: 'K', value: 4.1, unit: 'mmol/L', measuredAt: '2026-11-10T08:00:00+07:00' }];
+  const known = run(report('CHEM_EXT'), { models: { [FV.CHEM_EXT]: fv }, history: prev });
+  assert.equal(check(known, 'CHEM-M03').status, 'NOT_APPLICABLE');
+  assert.equal(known.decision, DECISIONS.AUTO);
+  // panel without a configured first-visit model
+  assert.equal(check(run(report('CHEM_BASIC'), { models: { [FV.CHEM_EXT]: fv } }), 'CHEM-M03').status, 'NOT_APPLICABLE');
+});
+
+test('first-visit policy: only ALWAYS_REVIEW runs; any other configured value still holds the report', () => {
+  const h02 = rulesets.CHEM.rules.find(r => r.code === 'CHEM-H02');
+  assert.equal(h02.params.firstVisitAbnormalPolicy, 'ALWAYS_REVIEW');
+  const altered = { ...rulesets, CHEM: { ...rulesets.CHEM, rules: rulesets.CHEM.rules.map(r => r.code === 'CHEM-H02' ? { ...r, params: { ...r.params, firstVisitAbnormalPolicy: 'MODEL_FLAG_ONLY' } } : r) } };
+  const ev = evaluateReport(report('CHEM_BASIC', { K: 5.6 }), { catalog, rulesets: altered, qcLog: qcPass, history: [], models: {} });
+  assert.equal(ev.checks.find(c => c.code === 'CHEM-H02').status, 'FAIL');
+  assert.equal(ev.decision, DECISIONS.REVIEW);
 });
 
 test('features never use history at or after the evaluated time', () => {
@@ -132,15 +174,6 @@ test('features never use history at or after the evaluated time', () => {
   const f = extractFeatures(report('CHEM_BASIC'), [future], catalog);
   assert.equal(f.hist_avail, 0);
   assert.equal(f.d_K, null);
-});
-
-test('logistic regression learns a separable toy problem', () => {
-  const rows = [], y = [];
-  for (let i = 0; i < 400; i++) { const v = (i % 2) ? 2 + (i % 7) / 10 : -2 - (i % 5) / 10; rows.push({ a: v, b: i % 3 }); y.push(i % 2); }
-  const m = trainLogReg(rows, y, ['a', 'b'], { epochs: 200 });
-  assert.ok(scoreFeatures({ a: 2.5, b: 1 }, m).score > 0.9);
-  assert.ok(scoreFeatures({ a: -2.5, b: 1 }, m).score < 0.1);
-  assert.ok(scoreFeatures({ a: null, b: 1 }, m).score > 0.05, 'missing value is mean-imputed, not zero-in-raw-space');
 });
 
 // ---- regressions from the Codex review (round 2) ----
@@ -294,4 +327,30 @@ test('coverage distinguishes not-ordered (type B) from ordered-without-result (t
   const c = coverage(r, tests);
   assert.equal(c.used, 1); assert.equal(c.total, 3);
   assert.deepEqual(c.missing, [{ test: 'K', reason: 'NO_RESULT' }, { test: 'CA', reason: 'NOT_ORDERED' }]);
+});
+
+test('a value in the wrong unit never reaches the model as if it were in the configured unit', () => {
+  const r = report('CHEM_BASIC', { GLU: 104 });
+  r.results.find(x => x.test === 'GLU').unit = 'mg/dL';
+  const f = extractFeatures(r, [], catalog);
+  assert.equal(f.z_GLU, null); assert.equal(f.m_GLU, 0);
+  assert.deepEqual(coverage(r, ['GLU', 'NA'], catalog).missing, [{ test: 'GLU', reason: 'NO_RESULT' }]);
+  const ev = run(r, { models: { [IV]: stub(IV, 20) } });
+  assert.equal(check(ev, 'CHEM-M02').status, 'NOT_EVALUABLE');   // glucose is a key input of the IV-fluid model
+  assert.equal(ev.decision, DECISIONS.BLOCKED);                    // the unit rule still blocks
+});
+
+test('a model that cannot evaluate (key input missing) holds the report — the final decision, not just the status', () => {
+  const edtaLike = stub(IV, -20, { keyTests: ['K', 'CA'] });
+  const ev = run(report('CHEM_BASIC'), { models: { [IV]: edtaLike } });
+  assert.equal(check(ev, 'CHEM-M02').status, 'NOT_EVALUABLE');
+  assert.equal(ev.decision, DECISIONS.REVIEW);   // Codex r3: previously IGNORE → AUTO_APPROVE_ELIGIBLE
+});
+
+test('evaluation report is flagged stale when models/rules differ from what it was computed with', async () => {
+  const { stackFingerprint } = await import('../src/core/load-models.js');
+  const a = stackFingerprint({ x: { threshold: 0.5 } }, rulesets, catalog);
+  assert.notEqual(a, stackFingerprint({ x: { threshold: 0.6 } }, rulesets, catalog));
+  assert.notEqual(a, stackFingerprint({}, rulesets, catalog));
+  assert.equal(a, stackFingerprint({ x: { threshold: 0.5 } }, rulesets, catalog));
 });

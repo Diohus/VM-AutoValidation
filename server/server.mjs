@@ -9,26 +9,38 @@ import { randomUUID, createHash } from 'node:crypto';
 import { llmStatus, buildLlmInput, explainReport } from './llm.mjs';
 import { evaluateReport, DECISIONS } from '../src/core/engine.js';
 import { buildHistoryIndex, historyFor } from '../src/core/history.js';
+import { loadModels, stackFingerprint } from '../src/core/load-models.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const read = p => JSON.parse(readFileSync(root + p, 'utf8'));
 
+// Startup never trains models and never calls Python: the app only uses the model JSON committed in models/
+// (trained offline by ml/train_runtime.py). Without them it runs on rules alone and says so.
 export function ensureArtifacts(log = console.log) {
   if (!existsSync(root + 'data/synthetic/dataset.json')) {
     log('Chưa có dữ liệu giả lập → đang sinh (seed cố định)…');
     execFileSync(process.execPath, [root + 'scripts/generate-data.mjs'], { stdio: 'inherit' });
   }
-  if (!existsSync(root + 'models/chem_contam.json') || !existsSync(root + 'reports/evaluation.json')) {
-    log('Chưa có mô hình → đang huấn luyện…');
-    execFileSync(process.execPath, [root + 'scripts/train.mjs'], { stdio: 'inherit' });
+  if (!Object.keys(loadModels(root + 'models')).length)
+    log('Không tìm thấy mô hình trong models/ → chỉ chạy rule. Huấn luyện ngoại tuyến: xem README (ml/train_runtime.py).');
+  if (!existsSync(root + 'reports/evaluation-comparison.json')) {
+    log('Chưa có báo cáo đánh giá → đang tính (Node, không cần Python)…');
+    execFileSync(process.execPath, [root + 'scripts/evaluate-comparison.mjs'], { stdio: 'inherit' });
   }
 }
+
+// Model summary for the UI: never ship tree / reference arrays to the browser.
+const modelSummary = m => ({ key: m.key, kind: m.kind, name: m.name, version: m.version, algorithm: m.algorithm, threshold: m.threshold,
+  status: m.status, scope: m.scope, scopeNote: m.scopeNote, panel: m.panel, keyTests: m.keyTests, targets: m.targets,
+  thresholdSelection: m.thresholdSelection, trainedOn: m.trainedOn, benchmarkTest: m.benchmarkTest, disclaimer: m.disclaimer });
 
 export function createApp({ runtimeFile = root + 'data/runtime/state.json', sendDelayMs = [700, 1800], sendFailRate = 0.1, random = Math.random } = {}) {
   const catalog = read('config/analytes.json');
   const rulesets = { CHEM: read('config/rules.chem.json'), HEME: read('config/rules.heme.json') };
-  const models = Object.fromEntries(readdirSync(root + 'models').filter(f => f.endsWith('.json')).map(f => [f.replace('.json', ''), read('models/' + f)]));
-  const evaluationReport = read('reports/evaluation.json');
+  const models = loadModels(root + 'models');
+  const evaluationReport = existsSync(root + 'reports/evaluation-comparison.json') ? read('reports/evaluation-comparison.json') : null;
+  // The report is only valid for the exact models/rules/catalog it was computed with.
+  const evaluationStale = !!evaluationReport && evaluationReport.fingerprint !== stackFingerprint(models, rulesets, catalog);
   const ds = read('data/synthetic/dataset.json');
   const today = ds.meta.today;
   const baseReports = new Map(ds.reports.map(r => [r.reportId, r]));
@@ -308,7 +320,7 @@ export function createApp({ runtimeFile = root + 'data/runtime/state.json', send
       if (p.startsWith('/api/')) {
         if (req.method === 'POST' && req.headers['content-type']?.split(';')[0] !== 'application/json') throw httpError(415, 'Cần Content-Type: application/json');
         const m = p.match(/^\/api\/reports\/([A-Z0-9-]+)(?:\/(action|amend|retry-send|explain))?$/);
-        if (req.method === 'GET' && p === '/api/meta') return json(res, 200, { today, disclaimer: ds.meta.disclaimer, llm: llmStatus(), settings: state.settings, rulesets: Object.fromEntries(Object.entries(rulesets).map(([k, v]) => [k, { version: v.version, status: v.status }])), models: Object.values(models).map(m => ({ key: m.key, name: m.name, version: m.version, threshold: m.threshold, status: m.status, scope: m.scope })), catalogVersion: catalog.version, worklistSize: worklistIds.length, reasons: REASONS, panels: catalog.panels, analytes: catalog.analytes });
+        if (req.method === 'GET' && p === '/api/meta') return json(res, 200, { today, disclaimer: ds.meta.disclaimer, llm: llmStatus(), settings: state.settings, rulesets: Object.fromEntries(Object.entries(rulesets).map(([k, v]) => [k, { version: v.version, status: v.status }])), models: Object.values(models).map(modelSummary), catalogVersion: catalog.version, worklistSize: worklistIds.length, reasons: REASONS, panels: catalog.panels, analytes: catalog.analytes });
         if (req.method === 'GET' && p === '/api/worklist') return json(res, 200, worklistIds.map(summary));
         if (m && req.method === 'GET' && !m[2]) { if (!baseReports.has(m[1])) throw httpError(404, 'Không tìm thấy phiếu'); return json(res, 200, detail(m[1])); }
         if (m && req.method === 'POST' && m[2]) {
@@ -373,7 +385,7 @@ export function createApp({ runtimeFile = root + 'data/runtime/state.json', send
           return res.end('﻿' + [cols.join(','), ...state.feedback.map(f => cols.map(c => esc(f[c])).join(','))].join('\n'));
         }
         if (req.method === 'GET' && p === '/api/rules') return json(res, 200, { rulesets, catalog });
-        if (req.method === 'GET' && p === '/api/evaluation') return json(res, 200, { evaluation: evaluationReport, models });
+        if (req.method === 'GET' && p === '/api/evaluation') return json(res, 200, { evaluation: evaluationReport, stale: evaluationStale, models: Object.values(models).map(modelSummary) });
         throw httpError(404, 'Không có API này');
       }
       if (!['GET', 'HEAD'].includes(req.method)) throw httpError(405, 'Method not allowed');

@@ -26,7 +26,9 @@ Ghi chú: phần **yêu cầu của chủ dự án** lấy từ `PROJECT CONTEXT
 
 - Không có xác thực người dùng. Vai trò "Người phụ trách (demo)" là cố định.
 - Trạng thái lưu trong một file JSON cục bộ, không có cơ chế đồng thời nhiều người dùng.
-- Mô hình đang chạy vẫn là logistic regression (`chem_contam`). Đã benchmark LR với XGBoost/LightGBM ngoại tuyến bằng Python (`ml/benchmark.py`); chưa thay mô hình đang chạy. Chưa hiệu chỉnh xác suất, chưa có conformal prediction.
+- Mô hình đang chạy (`models/*.json`, huấn luyện ngoại tuyến bằng Python, suy luận bằng JS không dependency): **lẫn dịch truyền** (LightGBM, `chem_ivfluid`) và **bất thường ở người khám lần đầu** (KNN theo panel, `fv_*`). Logistic regression, XGBoost và LightGBM được so trong `ml/benchmark.py`. Mỗi điểm có giải thích theo từng phiếu (Saabas cho cây; độ lệch từng chỉ số so với các phiếu lân cận cho KNN) và mức phủ dữ liệu. Điểm JS được test khớp với thư viện (`tests/model.test.js`).
+- Điểm mô hình chưa hiệu chỉnh xác suất, chưa có conformal prediction. Ngưỡng chọn theo recall định trước (cây) hoặc tỷ lệ gắn cờ 5% (KNN) trên tập validation giả lập.
+- Server không gọi Python khi khởi động: thiếu `models/*.json` thì chạy chỉ rule và ghi rõ trên giao diện.
 - Chưa có PBRTQC (theo dõi trôi máy bằng dòng kết quả bệnh nhân), chưa có vi sinh, nước tiểu hay kết quả định tính.
 
 ## Câu hỏi mới về lớp mô hình (17/11/2026)
@@ -38,4 +40,8 @@ Ghi chú: phần **yêu cầu của chủ dự án** lấy từ `PROJECT CONTEXT
    - Hiện chỉ hóa sinh (CHEM-H02, K/Na/Ca) có rule "cần lịch sử khi bất thường"; CBC chưa có rule tương đương.
 2. **Thời điểm "có sẵn" của kết quả cũ.** Lịch sử đang được lọc theo thời điểm đo. Trong LIS thật cần lọc theo thời điểm kết quả được xác nhận/phát hành, theo đúng phiên bản (kết quả đo trước nhưng được sửa sau không được dùng như bản cuối). Dữ liệu giả lập chưa có trường này.
 3. **Nhầm mẫu (WBIT) được coi là ngoài phạm vi** vì mẫu có SID định danh. Delta check vẫn giữ để bắt thay đổi thật và lỗi phân tích. Nếu sau này có số liệu WBIT thật (ví dụ từ nhật ký lấy lại mẫu), cần xem lại quyết định này.
-4. **Lỗi phân tích không có cờ máy** (bọt khí, kim hút tắc một phần…): khoa có ghi nhận các ca này không (nhật ký chạy lại có lý do)? Đây là nguồn nhãn để kiểm chứng mô hình `analytical`, hiện chỉ có trên dữ liệu giả lập.
+4. **Lỗi phân tích không có cờ máy** (bọt khí, kim hút tắc một phần…): khoa có ghi nhận các ca này không (nhật ký chạy lại có lý do)? Đây là nguồn nhãn để kiểm chứng mô hình lỗi phân tích (hiện không triển khai vì quá nhiều báo động giả trên dữ liệu giả lập).
+5. **Trích dẫn cần đồng đội xác minh** (phần thêm trong PR #2, đã gỡ khỏi tài liệu cho tới khi đối chiếu):
+   - "Farrell et al. 2026, Ann Clin Biochem" (doi:10.1177/00045632261488751) — **không có trong tổng quan nghiên cứu**.
+   - Năm của Tortosa-Carreres: tổng quan ghi cả "CCLM 2026;64(3) (trực tuyến 29/10/2025)" (tiêu đề mục) lẫn "2025" (bảng, danh mục). Cần thống nhất.
+   - Các DOI (Graham 2025: 10.1093/clinchem/hvae210; Tortosa-Carreres: 10.1515/cclm-2025-0564; Spies 2025: 10.1093/clinchem/hvae168) không có trong tổng quan nên chưa đối chiếu được.
