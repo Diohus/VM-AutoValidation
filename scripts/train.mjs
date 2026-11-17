@@ -1,4 +1,5 @@
 // Offline training + evaluation on SYNTHETIC data. Results describe the simulation only.
+// WBIT is out of scope (project decision 2026-11-17). Benchmarks of LR/XGBoost/LightGBM live in ml/ (Python).
 // - One logistic-regression (L2) detector per error family (not a single "correct/incorrect" classifier).
 // - Subject-level split (train/val/test) fixed before error injection.
 // - Threshold pre-specified by a recall target on the validation split, within the detector's scope.
@@ -16,15 +17,9 @@ const catalog = read('config/analytes.json');
 const rulesets = { CHEM: read('config/rules.chem.json'), HEME: read('config/rules.heme.json') };
 const ds = read('data/synthetic/dataset.json');
 
-const HIST_FEATS = ['hist_avail', 'n_deltas', 'delta_ms', 'delta_max_abs', 'log_days_since_prev', 'acute_setting'];
 export const DETECTORS = [
-  { key: 'chem_wbit', discipline: 'CHEM', name: 'Nghi nhầm mẫu (WBIT) — hóa sinh', targets: ['wbit'], recallTarget: 0.8, scope: 'history',
-    scopeNote: 'chỉ ca có lịch sử ≤90 ngày (không có lịch sử thì không thể so sánh)',
-    features: f => f.startsWith('ad_') || HIST_FEATS.includes(f) },
   { key: 'chem_contam', discipline: 'CHEM', name: 'Nghi nhiễm EDTA / lẫn dịch truyền — hóa sinh', targets: ['edta', 'saline', 'd5w'], recallTarget: 0.9, scope: 'all',
-    scopeNote: 'mọi phiếu hóa sinh có dữ liệu hợp lệ', features: f => !f.startsWith('ad_') },
-  { key: 'heme_wbit', discipline: 'HEME', name: 'Nghi nhầm mẫu (WBIT) — CBC', targets: ['wbit'], recallTarget: 0.8, scope: 'history',
-    scopeNote: 'chỉ ca có lịch sử ≤90 ngày', features: f => f.startsWith('ad_') || f.startsWith('d_') || [...HIST_FEATS, 'recent_transfusion'].includes(f) }
+    scopeNote: 'mọi phiếu hóa sinh có dữ liệu hợp lệ', features: f => !f.startsWith('ad_') }
 ];
 
 const index = buildHistoryIndex(ds.reports);
@@ -61,7 +56,7 @@ for (const det of DETECTORS) {
   const inScope = x => x.r.discipline === det.discipline && !x.r.truth.dataIssue && (det.scope !== 'history' || x.feats.hist_avail);
   const subset = rows.filter(inScope);
   const featureNames = Object.keys(subset[0].feats).filter(det.features);
-  const y = x => det.targets.includes(x.r.truth.sampleError) ? 1 : 0;
+  const y = x => (x.r.truth.errors ?? [x.r.truth.sampleError]).some(e => det.targets.includes(e)) ? 1 : 0;
   const train = subset.filter(x => x.r.split === 'train');
   const val = subset.filter(x => x.r.split === 'val');
   const test = subset.filter(x => x.r.split === 'test');

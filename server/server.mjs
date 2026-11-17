@@ -18,7 +18,7 @@ export function ensureArtifacts(log = console.log) {
     log('Chưa có dữ liệu giả lập → đang sinh (seed cố định)…');
     execFileSync(process.execPath, [root + 'scripts/generate-data.mjs'], { stdio: 'inherit' });
   }
-  if (!existsSync(root + 'models/chem_wbit.json') || !existsSync(root + 'reports/evaluation.json')) {
+  if (!existsSync(root + 'models/chem_contam.json') || !existsSync(root + 'reports/evaluation.json')) {
     log('Chưa có mô hình → đang huấn luyện…');
     execFileSync(process.execPath, [root + 'scripts/train.mjs'], { stdio: 'inherit' });
   }

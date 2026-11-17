@@ -218,6 +218,10 @@ const handlers = {
     const hits = [];
     for (const u of comparable) {
       const p = prev[u.test];
+      if (p.value === 0) { // 0 is a real result: % change is undefined, so any change from 0 is surfaced, never Infinity%
+        if (u.value !== 0) hits.push({ test: u.test, text: `${u.test}: ${p.value} → ${u.value} (lần trước = 0, không tính được % thay đổi — cần xem, lần trước ${p.measuredAt.slice(0, 10)})` });
+        continue;
+      }
       const pct = (u.value - p.value) / p.value * 100;
       const lim = rule.params.rcvOverridePct?.[u.test] ?? Number((u.def.rcvPct * (rule.params.rcvMultiplier ?? 1)).toFixed(1));
       if (Math.abs(pct) > lim) hits.push({ test: u.test, text: `${u.test}: ${p.value} → ${u.value} (${pct > 0 ? '+' : ''}${fmt(pct, 0)}%, giới hạn ±${lim}%, lần trước ${p.measuredAt.slice(0, 10)})` });

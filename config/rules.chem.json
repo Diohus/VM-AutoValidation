@@ -1,6 +1,6 @@
 {
   "rulesetId": "CHEM-AV",
-  "version": "chem-demo-1.0.0",
+  "version": "chem-demo-1.1.0",
   "discipline": "CHEM",
   "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
   "approvedBy": null,
@@ -280,19 +280,7 @@
         "dilutionPct": 10
       }
     },
-    {
-      "code": "CHEM-M01",
-      "type": "model_score",
-      "stage": "MODEL",
-      "priority": 80,
-      "onFail": "REVIEW",
-      "onNotEvaluable": "IGNORE",
-      "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
-      "reason": "Độ lệch đa chỉ số so với lịch sử bất thường so với biến thiên trong cá thể. Mô hình chỉ có quyền chuyển MANUAL_REVIEW; không vượt qua điều kiện chặn hay tự duyệt thay rule.",
-      "params": {
-        "model": "chem_wbit"
-      }
-    },
+    
     {
       "code": "CHEM-M02",
       "type": "model_score",

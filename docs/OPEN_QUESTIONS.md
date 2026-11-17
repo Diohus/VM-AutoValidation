@@ -26,5 +26,16 @@ Ghi chú: phần **yêu cầu của chủ dự án** lấy từ `PROJECT CONTEXT
 
 - Không có xác thực người dùng. Vai trò "Người phụ trách (demo)" là cố định.
 - Trạng thái lưu trong một file JSON cục bộ, không có cơ chế đồng thời nhiều người dùng.
-- Mô hình là logistic regression để giải thích được. Chưa so sánh với XGBoost/LightGBM (không có thư viện trong môi trường), chưa hiệu chỉnh xác suất, chưa có conformal prediction.
+- Mô hình đang chạy vẫn là logistic regression (`chem_contam`). Đã benchmark LR với XGBoost/LightGBM ngoại tuyến bằng Python (`ml/benchmark.py`); chưa thay mô hình đang chạy. Chưa hiệu chỉnh xác suất, chưa có conformal prediction.
 - Chưa có PBRTQC (theo dõi trôi máy bằng dòng kết quả bệnh nhân), chưa có vi sinh, nước tiểu hay kết quả định tính.
+
+## Câu hỏi mới về lớp mô hình (17/11/2026)
+
+1. **Người khám lần đầu có kết quả ngoài khoảng tham chiếu: chính sách nào?** Khoa chưa chốt. Prototype có tùy chọn `firstVisitAbnormalPolicy`:
+   - `ALWAYS_REVIEW` (**mặc định**, an toàn hơn): giữ rule CHEM-H02 (K/Na/Ca bất thường mà không có lịch sử → chuyển người duyệt). Mô hình bất thường chỉ thêm cờ.
+   - `MODEL_FLAG_ONLY` (đề xuất mặc định, **chờ khoa và người dùng xác nhận**: chỉ dùng trong benchmark, chưa đưa lên giao diện): tắt CHEM-H02; chỉ chuyển người duyệt khi mô hình phát hiện bất thường (KNN/one-class SVM/Gaussian, ngưỡng gắn cờ 5%) gắn cờ. Nếu mô hình không đánh giá được thì quay về `ALWAYS_REVIEW`.
+   - Lưu ý: `MODEL_FLAG_ONLY` cho phép mô hình **bỏ** một lượt giữ của rule, ngược với nguyên tắc "mô hình chỉ được nâng lên MANUAL_REVIEW". Nếu khoa chọn cách này, nguyên tắc đó cần được sửa một cách tường minh. Số phiếu được thả thêm và số lỗi trong đó: xem `reports/benchmark.json` → `firstVisitPolicy`.
+   - Hiện chỉ hóa sinh (CHEM-H02, K/Na/Ca) có rule "cần lịch sử khi bất thường"; CBC chưa có rule tương đương.
+2. **Thời điểm "có sẵn" của kết quả cũ.** Lịch sử đang được lọc theo thời điểm đo. Trong LIS thật cần lọc theo thời điểm kết quả được xác nhận/phát hành, theo đúng phiên bản (kết quả đo trước nhưng được sửa sau không được dùng như bản cuối). Dữ liệu giả lập chưa có trường này.
+3. **Nhầm mẫu (WBIT) được coi là ngoài phạm vi** vì mẫu có SID định danh. Delta check vẫn giữ để bắt thay đổi thật và lỗi phân tích. Nếu sau này có số liệu WBIT thật (ví dụ từ nhật ký lấy lại mẫu), cần xem lại quyết định này.
+4. **Lỗi phân tích không có cờ máy** (bọt khí, kim hút tắc một phần…): khoa có ghi nhận các ca này không (nhật ký chạy lại có lý do)? Đây là nguồn nhãn để kiểm chứng mô hình `analytical`, hiện chỉ có trên dữ liệu giả lập.

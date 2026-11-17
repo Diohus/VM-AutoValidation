@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { evaluateReport, DECISIONS } from '../src/core/engine.js';
-import { extractFeatures } from '../src/core/features.js';
+import { extractFeatures, coverage } from '../src/core/features.js';
 import { trainLogReg, scoreFeatures } from '../src/core/model.js';
 
 const read = p => JSON.parse(readFileSync(new URL('../' + p, import.meta.url), 'utf8'));
@@ -121,9 +121,9 @@ test('model can escalate to review but can never lift a block or approve', () =>
 });
 
 test('history-scoped model is not applied without history', () => {
-  const m = { key: 'chem_wbit', name: 'w', version: 't', requiresHistory: true, features: ['hist_avail'], mean: [0], sd: [1], weights: [0], bias: 20, threshold: 0.5 };
-  const ev = run(report('CHEM_EXT'), { models: { chem_wbit: m } });
-  assert.equal(check(ev, 'CHEM-M01').status, 'NOT_APPLICABLE');
+  const m = { key: 'chem_contam', name: 'w', version: 't', requiresHistory: true, features: ['hist_avail'], mean: [0], sd: [1], weights: [0], bias: 20, threshold: 0.5 };
+  const ev = run(report('CHEM_EXT'), { models: { chem_contam: m } });
+  assert.equal(check(ev, 'CHEM-M02').status, 'NOT_APPLICABLE');
   assert.equal(ev.decision, DECISIONS.AUTO);
 });
 
@@ -239,4 +239,59 @@ test('a diagnosis alone never changes the personal interval', () => {
   const b = run(report('CHEM_BASIC', { CRE: 329 }, { context: withDx }), { history: [], settings: { personalMode: 'ADAPT' } });
   assert.equal(a.decision, b.decision);
   assert.equal(b.decision, DECISIONS.REVIEW);
+});
+
+test('WBIT is out of scope: no WBIT model rule remains in either ruleset', () => {
+  for (const rs of Object.values(rulesets)) {
+    assert.ok(!rs.rules.some(r => /wbit/i.test(r.params?.model ?? '') || r.code.endsWith('-M01')), rs.rulesetId);
+  }
+  assert.ok(rulesets.CHEM.rules.some(r => r.type === 'delta_check') && rulesets.HEME.rules.some(r => r.type === 'delta_check'), 'delta check kept');
+});
+
+test('a result of 0 is a real value: finite features, never treated as missing', () => {
+  const f = extractFeatures(report('CBC', { NEU: 0, LYM: 0, PLT: 0 }), [], catalog);
+  for (const k of ['z_NEU', 'z_LYM', 'z_PLT']) assert.ok(Number.isFinite(f[k]), k);
+  assert.equal(f.m_NEU, 1);
+  const c = extractFeatures(report('CHEM_EXT', { CA: 0, ALT: 0 }), [], catalog);
+  assert.ok(Number.isFinite(c.z_CA) && Number.isFinite(c.z_ALT));
+  assert.ok(Number.isFinite(c.k_minus_ca));
+});
+
+test('delta from a previous 0 (and to 0) stays finite in features and in the delta rule', () => {
+  const prev = [{ test: 'NEU', value: 0, unit: '%', measuredAt: '2026-11-10T08:00:00+07:00' }, { test: 'PLT', value: 0, unit: 'G/L', measuredAt: '2026-11-10T08:00:00+07:00' }];
+  const f = extractFeatures(report('CBC'), prev, catalog);
+  assert.ok(Number.isFinite(f.d_NEU) && Number.isFinite(f.d_PLT));
+  const ev = run(report('CBC'), { history: prev });
+  const h = ev.checks.find(c => c.type === 'delta_check');
+  assert.equal(h.status, 'FAIL');
+  assert.ok(!/Infinity|NaN/.test(h.message), h.message);
+  // 0 → 0: no change (feature delta exactly 0, rule passes)
+  assert.equal(extractFeatures(report('CBC', { PLT: 0 }), [prev[1]], catalog).d_PLT, 0);
+  assert.equal(run(report('CBC', { PLT: 0 }), { history: [prev[1]] }).checks.find(c => c.type === 'delta_check').status, 'PASS');
+  // positive → 0 (Codex round 2): current 0 is used, delta is finite and negative, the rule flags it
+  const prevPos = [{ test: 'PLT', value: 248, unit: 'G/L', measuredAt: '2026-11-10T08:00:00+07:00' }];
+  const toZero = extractFeatures(report('CBC', { PLT: 0 }), prevPos, catalog);
+  assert.ok(Number.isFinite(toZero.d_PLT) && toZero.d_PLT < 0, String(toZero.d_PLT));
+  const evZero = run(report('CBC', { PLT: 0 }), { history: prevPos }).checks.find(c => c.type === 'delta_check');
+  assert.equal(evZero.status, 'FAIL');
+  assert.ok(evZero.analytes.includes('PLT') && !/Infinity|NaN/.test(evZero.message), evZero.message);
+});
+
+test('missing data is never imputed: not-ordered analytes and absent history give null + flags', () => {
+  const f = extractFeatures(report('CHEM_BASIC'), [], catalog);
+  assert.equal(f.z_CA, null); assert.equal(f.m_CA, 0); assert.equal(f.m_K, 1);
+  assert.equal(f.k_minus_ca, null);
+  assert.equal(f.hist_avail, 0);
+  for (const k of ['n_deltas', 'delta_ms', 'delta_max_abs', 'log_days_since_prev', 'd_K']) assert.equal(f[k], null, k);
+  const noAge = report('CHEM_BASIC'); noAge.context = { ...noAge.context, age: undefined };
+  assert.equal(extractFeatures(noAge, [], catalog).age_dec, null);
+});
+
+test('coverage distinguishes not-ordered (type B) from ordered-without-result (type A)', () => {
+  const tests = ['K', 'CA', 'NA'];
+  const r = report('CHEM_BASIC', { K: null }, {});
+  r.results.find(x => x.test === 'K').status = 'PENDING';
+  const c = coverage(r, tests);
+  assert.equal(c.used, 1); assert.equal(c.total, 3);
+  assert.deepEqual(c.missing, [{ test: 'K', reason: 'NO_RESULT' }, { test: 'CA', reason: 'NOT_ORDERED' }]);
 });

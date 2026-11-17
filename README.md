@@ -15,9 +15,18 @@ Yêu cầu Node.js ≥ 22. Không cần cài thư viện nào (không có depend
 
 ```bash
 npm start          # tự sinh dữ liệu + huấn luyện nếu chưa có, rồi mở http://127.0.0.1:5173
-npm test           # 46 test: rule (gồm thiếu dữ liệu), ngưỡng cá nhân, mô hình, LLM (không gọi mạng), luồng duyệt/ký/phản hồi
+npm test           # 51 test: rule (gồm thiếu dữ liệu, giá trị 0), ngưỡng cá nhân, mô hình, LLM (không gọi mạng), luồng duyệt/ký/phản hồi
 npm run setup      # sinh lại dữ liệu (seed cố định) và huấn luyện lại
 npm run diagnose   # rule nào đang giữ phiếu "sạch"; 16 kịch bản có ra đúng quyết định không
+```
+
+Benchmark mô hình (ngoại tuyến, Python; server không cần Python):
+
+```bash
+python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt
+npm run bench:data   # bộ benchmark riêng: 10.000 người bệnh, seed 20261117 (~3 phút)
+npm run bench        # ml/benchmark.py → reports/benchmark.json + bảng tóm tắt (~9 phút)
+npm run bench:test   # test hồi quy của benchmark
 ```
 
 Lần chạy đầu mất khoảng 30 giây để sinh khoảng 19.000 phiếu và huấn luyện. Trạng thái demo (phản hồi, nhật ký, phiên bản sửa) lưu ở `data/runtime/state.json`. Có thể xóa trong tab *Nhật ký*.
@@ -43,7 +52,7 @@ Lần chạy đầu mất khoảng 30 giây để sinh khoảng 19.000 phiếu v
 | KB1 | Đầy đủ, ổn định, QC đạt | AUTO_APPROVE_ELIGIBLE |
 | KB2 | Glucose 11,7 ngoài tham chiếu nhưng ổn định theo lịch sử (bệnh nền chỉ hiển thị, không tự cho qua) | AUTO_APPROVE_ELIGIBLE |
 | KB2b | Tiểu đường, glucose về mục tiêu sau khi bắt đầu insulin (−44%) | MANUAL_REVIEW |
-| KB3 / KB3b / KB3c | Creatinine tăng 123% / nghi WBIT trên CBC / nghi lẫn NaCl 0,9% | MANUAL_REVIEW |
+| KB3 / KB3b / KB3c | Creatinine tăng 123% / CBC thay đổi lớn MCV/RDW, chưa rõ nguyên nhân / nghi lẫn NaCl 0,9% | MANUAL_REVIEW |
 | KB3d | Thay đổi thật khi nhập viện vì tổn thương thận cấp (ca âm tính khó, mẫu đúng) | MANUAL_REVIEW |
 | KB4 / KB4b / KB4c | QC K không đạt đang khóa / cờ PLT_CLUMPS / tan máu H=180 | BLOCKED |
 | KB5 / KB5b / KB5d | Sai đơn vị mg/dL / lỗi truyền kết quả Cl / thiếu HIL | BLOCKED |
@@ -63,37 +72,57 @@ src/core/model.js           logistic regression L2 (train + suy luận + đóng 
 src/core/history.js         tra lịch sử theo mã giả
 scripts/generate-data.mjs   sinh dữ liệu giả lập (xem docs/SYNTHETIC_DATA.md)
 scripts/train.mjs           huấn luyện các bộ phát hiện + đánh giá → models/*.json, reports/evaluation.json
+scripts/export-features.mjs xuất đặc trưng + quyết định chỉ-rule (từ engine JS) cho benchmark Python
+ml/benchmark.py             benchmark LR / XGBoost / LightGBM / KNN / OCSVM / Gaussian → reports/benchmark.json
 server/server.mjs           API + mô phỏng ký/gửi/ACK + lưu trạng thái
 public/                     giao diện tiếng Việt (vanilla JS, sáng/tối, dùng được trên điện thoại)
 tests/                      node:test
 docs/                       thiết kế dữ liệu, mô hình, các điểm chưa xác minh
 ```
 
-## Kết quả (trên dữ liệu giả lập, seed 20261116)
+## Benchmark lớp mô hình (17/11/2026, dữ liệu giả lập)
 
-Tập test gồm người bệnh không xuất hiện trong train/val. Tỷ lệ lỗi được làm giàu khoảng 10–50 lần so với thực tế. **Các con số dưới đây chỉ mô tả bản mô phỏng, không phải hiệu năng thật.**
+**Mọi con số dưới đây chỉ đúng trên dữ liệu giả lập**: tỷ lệ lỗi được làm giàu khoảng 10–50 lần, và lỗi do chính generator tiêm vào nên dễ phát hiện hơn lỗi thật. Không dùng làm tiêu chí nghiệm thu. Chi tiết đầy đủ ở `reports/benchmark.json`; kế hoạch và quyết định thiết kế ở [docs/MODEL_REDESIGN_PLAN.md](docs/MODEL_REDESIGN_PLAN.md).
 
-| | Hóa sinh: chỉ rule | Hóa sinh: rule + mô hình | CBC: chỉ rule | CBC: rule + mô hình |
-|---|---|---|---|---|
-| Đủ điều kiện tự duyệt | 74,7% | 74,2% | 84,1% | 82,1% |
-| Cho qua nhầm / số phiếu tự duyệt | 2,0% | 2,0% | 2,4% | 1,6% |
-| Lỗi mẫu bị cho qua | 13,8% | 13,3% | 34,3% | 22,9% |
-| Giữ phiếu không có lỗi (tổng) | 16,6% | 17,2% | 8,9% | 10,4% |
-| · do rule chính sách (ngoài giới hạn tự duyệt, thiếu lịch sử bắt buộc) | 2,8% | 2,8% | 3,7% | 3,7% |
-| · báo động giả (delta, nhất quán, HIL, mô hình…) | 13,9% | 14,4% | 5,1% | 6,7% |
+Thiết lập: bộ riêng gồm 10.000 người bệnh (seed 20261117), 63.273 phiếu, chia theo người bệnh 60/20/20. Đặc trưng và quyết định "chỉ rule" lấy từ chính engine JS. Siêu tham số chọn bằng GroupKFold theo người bệnh trên train; ngưỡng là ngưỡng lớn nhất đạt recall đích trên val; test chỉ dùng một lần. Không điền giá trị thiếu: cây nhận NaN trực tiếp, LR tách theo panel × có/không lịch sử. Khoảng tin cậy: Wilson; PR-AUC và báo động giả dùng thêm bootstrap theo người bệnh.
+
+**Tiêu chí chính: bắt thêm so với chỉ rule, và giá phải trả.** Bảng dưới là thuật toán chọn trước theo CV trên train.
+
+| Bộ phát hiện | Thuật toán | PR-AUC test | Rule đã bắt | Mô hình bắt thêm (trong số rule bỏ sót) | Báo động giả thêm (phiếu sạch rule cho qua) |
+|---|---|---|---|---|---|
+| Nhiễm EDTA | LR | 1,00 | 72/72 (100%) | 0/0 | 0/5.252 (0%) |
+| Lẫn dịch truyền (NaCl 0,9%, glucose 5%) | LightGBM | 0,99 | 106/112 (94,6%) | 3/6 | 0/5.252 (0%) |
+| Lỗi phân tích đơn chỉ số — hóa sinh | XGBoost | 0,33 | 41/56 (73,2%) | 10/15 | 2.481/5.252 (**47%**) |
+| Lỗi phân tích đơn chỉ số — CBC | XGBoost | 0,49 | 52/82 (63,4%) | 10/30 | 632/5.212 (**12%**) |
+| Bất thường, người khám lần đầu (KNN, gắn cờ 5%) | KNN | 0,47–0,60 | — | 6/24 (cả 3 panel) | 0,8–3,6% |
+
+So sánh thuật toán (PR-AUC test, cấu hình tốt nhất của từng thuật toán):
+
+| Bộ phát hiện | LR | XGBoost | LightGBM |
+|---|---|---|---|
+| Nhiễm EDTA | 1,00 | 1,00 | 1,00 |
+| Lẫn dịch truyền | 0,82 | 0,985 | 0,99 |
+| Lỗi phân tích — hóa sinh | 0,03 | 0,33 | 0,27 |
+| Lỗi phân tích — CBC | 0,46 | 0,49 | 0,50 |
+
+Khi ép cả ba thuật toán dùng cùng đầu vào (cùng tầng panel × lịch sử), XGBoost và LightGBM giảm nhẹ: dịch truyền còn 0,96; lỗi phân tích hóa sinh còn 0,22. Phần lợi thế của cây đến từ việc nhận trực tiếp giá trị thiếu và cờ "có đo".
 
 Đọc kết quả:
-- **Bộ rule** bắt gần như toàn bộ các lỗi có dấu hiệu rõ: QC, HIL, cờ máy, nhiễm EDTA, mẫu để lâu.
-- **Nhầm mẫu (WBIT)** là lỗ hổng chính. Không có lịch sử thì không thể phát hiện: ở hóa sinh, 26/61 ca WBIT là người bệnh không có lịch sử trong 90 ngày.
-- **Mô hình WBIT cho CBC** bắt thêm lỗi rõ rệt (tỷ lệ phát hiện WBIT từ 35% lên 58%). Đổi lại, tỷ lệ giữ không cần thiết tăng thêm khoảng 1,5 điểm.
-- **Mô hình WBIT cho hóa sinh** gần như không bắt thêm ca nào so với delta check. Mô hình hợp lệ trong phạm vi của nó, nhưng những ca nó phát hiện thì rule đã giữ rồi. Đây là ví dụ cho lý do phải so với baseline trước khi kết luận AI có lợi.
-- **PPV** ước tính ở tỷ lệ lỗi thật 0,03% chỉ còn 0,3–5%, đúng như cảnh báo trong tổng quan nghiên cứu (Farrell 2023).
+- **Nhiễm EDTA:** rule K–Ca và các rule khác đã bắt 100%, nên mô hình không bắt thêm được ca nào. Với panel cơ bản (không có Ca), mô hình trả NOT_EVALUABLE: độ nhạy trên toàn phạm vi chỉ còn 51–58%, nhưng các ca này vẫn bị rule giữ.
+- **Lẫn dịch truyền:** cây vượt LR rõ (PR-AUC 0,99 so với 0,82), bắt thêm 3/6 ca rule bỏ sót mà không thêm báo động giả nào. LR bắt thêm 4/6 nhưng thêm 2,1% báo động giả. Đây là chỗ duy nhất mô hình có lợi rõ ràng.
+- **Lỗi phân tích đơn chỉ số:** khó. Với hóa sinh, ở ngưỡng recall 80% định trước, mô hình giữ thêm gần một nửa số phiếu sạch, **không dùng được**. Với CBC, XGBoost bắt thêm 10/30 ca nhưng thêm 12% báo động giả. Recall trên chỉ số "chưa thấy khi train" thấp hơn rõ rệt (CBC: 43% so với 70%), tức mô hình học một phần cơ chế tiêm lỗi. Cách chọn ngưỡng theo recall cần đổi sang ngân sách báo động (ví dụ 1%) cho bộ này. Việc đổi phải chốt trước rồi mới chạy lại, không chỉnh theo kết quả test.
+- **Người khám lần đầu (KNN/OCSVM/Gaussian):** KNN có độ nhạy cao nhất ở hóa sinh (76–84%); với CBC thì ba mô hình tương đương nhau (PR-AUC khoảng 0,5). Phần bắt thêm so với rule nhỏ (6/24 ca rule bỏ sót), báo động giả thêm 0,8–3,6%. Tỷ lệ gắn cờ ở người bệnh nhập viện thật (mẫu đúng) là 0–5%.
+- **Chính sách người khám lần đầu (hóa sinh, 2.838 phiếu test):** `MODEL_FLAG_ONLY` tăng tỷ lệ tự duyệt từ 79,5% lên 84,4% (thả 139 phiếu), nhưng lỗi bị cho qua tăng từ 8/280 lên 12/280 (thêm 2 ca lỗi phân tích, 2 ca lẫn NaCl). Mặc định giữ `ALWAYS_REVIEW`; câu hỏi đã ghi ở [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md).
+- **Ablation bỏ đặc trưng nội trú/cấp cứu:** PR-AUC gần như không đổi, nên mô hình không dựa vào dấu vết tỷ lệ tiêm lỗi theo khoa.
+- **PPV ở tỷ lệ lỗi thật** (1%, 0,1%, 0,03%): xem `ppvAtAssumedPrevalence` trong `reports/benchmark.json`. Với các bộ có độ đặc hiệu < 99%, PPV ở 0,03% gần 0.
+
+Mô hình đang chạy trong server **chưa được thay** (vẫn là LR `chem_contam`). Bước thay mô hình chờ người dùng xác nhận.
 
 ## "AI" trong prototype gồm những gì
 
 | Thành phần | Là gì | Cần API key? |
 |---|---|---|
-| **Mô hình phát hiện lỗi** (bật/tắt ở sidebar) | 3 mô hình logistic regression **chạy cục bộ**, huấn luyện trên dữ liệu giả lập (`models/*.json`): nhầm mẫu hóa sinh, nhiễm mẫu hóa sinh, nhầm mẫu CBC. Chỉ được giữ thêm phiếu. | Không |
+| **Mô hình phát hiện lỗi** (bật/tắt ở sidebar) | Hiện chạy 1 mô hình logistic regression **cục bộ** (`models/chem_contam.json`, nhiễm EDTA/dịch truyền hóa sinh). Mô hình nhầm mẫu (WBIT) đã gỡ. Bộ mô hình mới (XGBoost/LightGBM, phát hiện bất thường cho người khám lần đầu) mới ở mức benchmark, **chưa thay mô hình đang chạy**. Chỉ được giữ thêm phiếu. | Không |
 | **Ngưỡng cá nhân** (chọn ở sidebar) | Khoảng thường gặp của từng người bệnh tính từ kết quả trước của chính họ. Xem [docs/PERSONALIZED_THRESHOLDS.md](docs/PERSONALIZED_THRESHOLDS.md). | Không |
 | **Diễn giải bằng LLM** (nút trong phiếu) | Gọi OpenAI `gpt-6-luna` để diễn giải lý do bằng lời. **Không** tham gia quyết định. | Có — điền `OPENAI_API_KEY` trong `.env` |
 
@@ -111,6 +140,14 @@ Hướng thiết kế do Codex tìm trên web (NHS Design System — Colour/Deta
 
 - **Vòng 1 (thiết kế):** Codex đọc PROJECT CONTEXT và tổng quan nghiên cứu, rồi góp ý. Các góp ý đã áp dụng: dùng logistic regression thay cho GBDT tự viết; mỗi loại lỗi một bộ phát hiện; chia tập theo người bệnh trước khi tiêm lỗi; tách 4 loại nhãn; khóa QC theo máy–xét nghiệm–thời điểm; ký cả phiếu; thêm 2 ca tiểu đường đối chứng; mô phỏng 3 tầng; dùng tham số CVi/CVg do Codex đề xuất.
 - **Vòng 2 (review mã):** Codex tìm ra 11 lỗi, đã sửa hết và mỗi lỗi có test hồi quy. Các lỗi gồm: gửi lại vượt qua quyết định giữ; kết quả thiếu máy hoặc thời điểm đo lọt qua QC; trạng thái lạ hoặc "không áp dụng" lọt qua kiểm tra đủ kết quả; kết quả ngoài chỉ định bị bỏ qua; lấy mẫu mới vẫn mang kết quả của ống cũ; thời gian không hợp lệ hoặc đo trước khi lấy mẫu vẫn đạt; look-ahead khi phiếu có nhiều thời điểm đo; HIL là NaN vẫn đạt; chuỗi "4.2ERROR" được đọc thành 4,2; phiếu kẹt ở SENDING sau khi khởi động lại; chỉ số "giữ không cần thiết" bị trộn với phần giữ theo chính sách.
+- **Làm lại lớp mô hình (17/11/2026), vòng 1 (kế hoạch):** Codex góp ý 11 điểm, đã áp dụng hết (bảng ở mục 9 của [docs/MODEL_REDESIGN_PLAN.md](docs/MODEL_REDESIGN_PLAN.md)). Hai lỗi của kế hoạch: ngưỡng recall diễn đạt ngược ("nhỏ nhất" phải là "lớn nhất"), và công thức z thiếu `/100`. Các điểm còn lại: `--out` của generator bị bỏ qua; giờ khám ngoại trú gán sau khi sắp xếp; `MODEL_FLAG_ONLY` phải quay về giữ phiếu khi mô hình không đánh giá được; so LR với cây phải cùng đầu vào; `analytical_single` dễ thành benchmark "tự đúng" (thêm chỉ số chỉ tiêm ở test); HCT nằm ngoài danh sách chỉ số của mô hình; báo mẫu số rõ cho "bắt thêm"; ablation khoa điều trị; nhãn đa lỗi.
+- **Làm lại lớp mô hình, vòng 2 (review mã):** Codex tìm ra 6 lỗi, đã sửa hết và mỗi lỗi có test hồi quy hoặc chốt chặn:
+  1. Mã người bệnh giả lập bị trùng (4 cặp trong bộ 10.000), làm gộp lịch sử của hai người. Đã sửa generator, thêm kiểm tra ở generator và bước xuất, rồi sinh lại dữ liệu.
+  2. Ngưỡng 5% của mô hình bất thường được hiệu chỉnh trên cả người tái khám quá 90 ngày. Nay hiệu chỉnh trên người khám lần đầu thật và báo riêng hai nhóm.
+  3. Chọn thuật toán bằng val. Nay chọn bằng CV trên train; val chỉ đặt ngưỡng.
+  4. Chưa có allow-list đặc trưng cố định. Nay khai báo danh sách tên chính xác, từ chối cột lạ, và chỉ loại cột thiếu toàn bộ dựa trên train.
+  5. Chỉ số "gắn cờ ở bệnh thật" loại mất chính các ca bệnh cần đo.
+  6. Test "về 0" chưa kiểm chiều từ giá trị dương về 0.
 
 ## Giả định đang dùng
 

@@ -41,7 +41,7 @@ const REASON_TXT = {
 const ACTION_LABEL = { APPROVE: 'Duyệt & ký', HOLD: 'Giữ lại', REQUEST_CHECK: 'Yêu cầu kiểm tra', NOTIFY_CRITICAL: 'Đã báo tới hạn', AUTO_APPROVE: 'Hệ thống tự duyệt' };
 const VERIFY_TXT = { NOT_VERIFIED: 'Chưa xác minh', RERUN_SAME: 'Chạy lại: kết quả tương tự', RERUN_DIFFERENT: 'Chạy lại: kết quả khác biệt', RECOLLECT_DIFFERENT: 'Mẫu mới: kết quả khác biệt', RECOLLECT_SAME: 'Mẫu mới: kết quả tương tự', CLINICAL_CONFIRMED: 'Khoa lâm sàng xác nhận phù hợp' };
 const SEND_TXT = { SENDING: ['info', 'Đang gửi, chờ ACK'], ACKED: ['auto', 'Đã ký/gửi (có ACK)'], FAILED: ['blocked', 'Gửi thất bại'], SUPERSEDED: ['neutral', 'Đã có phiên bản mới'] };
-const ERR_TXT = { wbit: 'Nhầm mẫu (WBIT)', edta: 'Nhiễm EDTA', saline: 'Lẫn NaCl 0,9%', d5w: 'Lẫn glucose 5%', hemolysis: 'Tan máu', delayed: 'Chậm xử lý mẫu', qc_window: 'Đo khi QC không đạt', plt_clump: 'Tiểu cầu kết cụm', clot: 'Cục đông', short_sample: 'Thiếu thể tích mẫu' };
+const ERR_TXT = { analytical_single: 'Lỗi phân tích đơn chỉ số', edta: 'Nhiễm EDTA', saline: 'Lẫn NaCl 0,9%', d5w: 'Lẫn glucose 5%', hemolysis: 'Tan máu', delayed: 'Chậm xử lý mẫu', qc_window: 'Đo khi QC không đạt', plt_clump: 'Tiểu cầu kết cụm', clot: 'Cục đông', short_sample: 'Thiếu thể tích mẫu' };
 const TITLES = { worklist: 'Hàng đợi duyệt', try: 'Nhập thử kết quả', eval: 'Đánh giá mô hình', feedback: 'Phản hồi chuyên môn', audit: 'Nhật ký', rules: 'Rule & cấu hình' };
 
 let meta, worklist = [], selected = null, current = null, decisionFilter = 'ACTION';

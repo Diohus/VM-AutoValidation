@@ -4,7 +4,7 @@
 
 export const MODEL_TESTS = {
   CHEM: ['GLU', 'URE', 'CRE', 'NA', 'K', 'CL', 'CA', 'MG', 'ALB', 'ALP', 'AST', 'ALT'],
-  HEME: ['WBC', 'RBC', 'HGB', 'MCV', 'MCH', 'MCHC', 'RDW', 'PLT', 'NEU', 'LYM']
+  HEME: ['WBC', 'RBC', 'HGB', 'HCT', 'MCV', 'MCH', 'MCHC', 'RDW', 'PLT', 'NEU', 'LYM']
 };
 
 const DAY = 86400000;
@@ -31,6 +31,48 @@ function centre(def, test, sex) {
   return popMean(def, sex);
 }
 function cvg(def, test) { return def.dist === 'derived' ? DERIVED_CVG[test] : def.cvg; }
+
+/** Reporting resolution of an analyte (10^-decimals): the ε used so that a reported 0 stays a finite, real value. */
+export function resolution(def) { return 10 ** -(def.decimals ?? 0); }
+const isLog = def => def.dist === 'lognormal';
+
+/**
+ * Value relative to the population centre, in units of between-subject CV (CV stored in %).
+ * lognormal analytes: (log(x+ε) − log(c+ε)) / (CVg/100). Others (incl. % analytes NEU/LYM/RDW): (x − c) / (c·CVg/100).
+ * Never undefined for x = 0.
+ */
+export function zScore(def, test, x, sex) {
+  const c = centre(def, test, sex), s = cvg(def, test) / 100;
+  if (isLog(def)) { const e = resolution(def); return (Math.log(x + e) - Math.log(c + e)) / s; }
+  return (x - c) / (c * s);
+}
+
+/**
+ * Change vs the previous result in units of the SD of a difference (√2·√(CVi²+CVa²), CV in %).
+ * lognormal: log ratio with ε; others: absolute difference scaled by the POPULATION centre (not by the previous
+ * value), so a previous result of 0 never divides by zero or explodes.
+ */
+export function deltaScore(def, test, x, prev, sex) {
+  const sd = Math.SQRT2 * Math.sqrt(def.cvi ** 2 + (def.cva ?? 1) ** 2) / 100;
+  if (isLog(def)) { const e = resolution(def); return (Math.log(x + e) - Math.log(prev + e)) / sd; }
+  return (x - prev) / (centre(def, test, sex) * sd);
+}
+
+/**
+ * Data coverage of a model's analytes on one report: which were used and why the others are missing.
+ * NOT_ORDERED = type B (not an error); NO_RESULT = type A (ordered, no usable value → rule D01 blocks).
+ */
+export function coverage(report, tests) {
+  const cur = currentValues(report);
+  const ordered = new Set(report.orderedTests ?? []);
+  const missing = [];
+  let used = 0;
+  for (const t of tests) {
+    if (cur[t] && cur[t].value >= 0) used++;
+    else missing.push({ test: t, reason: ordered.has(t) ? 'NO_RESULT' : 'NOT_ORDERED' });
+  }
+  return { used, total: tests.length, missing };
+}
 
 /** Latest prior numeric result per test inside the window. */
 export function previousResults(history, measuredAt, windowDays) {
@@ -61,35 +103,40 @@ export function extractFeatures(report, history, catalog, { windowDays = 90 } = 
   const measuredAt = report.results.find(r => r.measuredAt)?.measuredAt ?? report.specimen?.collectedAt;
   // Reference time is per analyte (a partially re-run report can mix run times): no look-ahead.
   const prevOf = t => cur[t]?.measuredAt && validTime(cur[t].measuredAt) ? previousResults(history, cur[t].measuredAt, windowDays)[t] : undefined;
+  // Missing values are NEVER imputed here: null = "no value" (not ordered / no result / no history).
+  // m_<test> says whether the analyte was measured on this report; d_<test> is null without history.
   const f = {};
-  let ss = 0, n = 0, maxAbs = 0, dilSum = 0, dilN = 0, lastPrevT = null;
+  let ss = 0, n = 0, maxAbs = 0, dilSum = 0, dilN = 0, minGapDays = null;
   for (const t of tests) {
     const def = catalog.analytes[t];
     const c = cur[t];
-    const val = c && c.value > 0 ? c.value : null;
-    f[`z_${t}`] = val == null ? null : Math.log(val / centre(def, t, sex)) / (cvg(def, t) / 100);
+    const val = c && c.value >= 0 ? c.value : null; // 0 is a real result; negative concentrations are invalid
+    f[`m_${t}`] = val == null ? 0 : 1;
+    f[`z_${t}`] = val == null ? null : zScore(def, t, val, sex);
     const p = prevOf(t);
-    if (val != null && p && p.value > 0) {
-      const sd = Math.SQRT2 * Math.sqrt(def.cvi ** 2 + (def.cva ?? 1) ** 2) / 100;
-      const d = Math.log(val / p.value) / sd;
+    const d = val != null && p && p.value >= 0 ? deltaScore(def, t, val, p.value, sex) : null;
+    if (d != null) {
       f[`d_${t}`] = d;
       f[`ad_${t}`] = Math.abs(d);
       ss += d * d; n++; maxAbs = Math.max(maxAbs, Math.abs(d));
       if (!['NA', 'CL', 'GLU'].includes(t)) { dilSum += d; dilN++; }
-      const pt = Date.parse(p.measuredAt);
-      if (lastPrevT == null || pt > lastPrevT) lastPrevT = pt;
+      // Gap measured per analyte (its own measuredAt vs its own previous result), then the smallest is kept.
+      const gap = (Date.parse(c.measuredAt) - Date.parse(p.measuredAt)) / DAY;
+      if (Number.isFinite(gap) && gap >= 0 && (minGapDays == null || gap < minGapDays)) minGapDays = gap;
     } else {
       f[`d_${t}`] = null;
       f[`ad_${t}`] = null;
     }
   }
   f.hist_avail = n > 0 ? 1 : 0;
-  f.n_deltas = n;
+  // Without history the aggregate delta features are "not evaluable" (null), not 0.
+  f.n_deltas = n ? n : null;
   f.delta_ms = n ? ss / n : null;
   f.delta_max_abs = n ? maxAbs : null;
-  f.log_days_since_prev = lastPrevT == null ? null : Math.log1p((Date.parse(measuredAt) - lastPrevT) / DAY);
+  f.log_days_since_prev = minGapDays == null ? null : Math.log1p(minGapDays);
   f.acute_setting = ['IPD', 'ER'].includes(report.ward) ? 1 : 0;
-  f.age_dec = (report.context?.age ?? 50) / 10;
+  const age = report.context?.age;
+  f.age_dec = typeof age === 'number' && Number.isFinite(age) ? age / 10 : null;
   f.sex_m = sex === 'M' ? 1 : 0;
   if (discipline === 'CHEM') {
     f.dilution_score = dilN ? dilSum / dilN : null;
@@ -120,5 +167,6 @@ export function featureLabel(name, catalog) {
   if (kind === 'z') return `${n}: mức so với quần thể`;
   if (kind === 'd') return `${n}: thay đổi có hướng so với lần trước`;
   if (kind === 'ad') return `${n}: độ lớn thay đổi so với lần trước`;
+  if (kind === 'm') return `${n}: có đo trên phiếu này`;
   return name;
 }

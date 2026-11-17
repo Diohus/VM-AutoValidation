@@ -8,3 +8,5 @@ coverage/
 private-data/
 data/synthetic/
 data/runtime/
+.venv/
+__pycache__/
