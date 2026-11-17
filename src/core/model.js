@@ -1,5 +1,5 @@
 // Runtime inference for the model layer (no npm dependencies). Models are trained OFFLINE in Python (ml/) and exported as JSON.
-// - tree_ensemble: XGBoost or LightGBM trees in one normalised format, with a per-report explanation (Saabas path attribution).
+// - tree_ensemble: XGBoost trees (PR #2's JSON-tree scorer, generalised), with a per-report explanation (Saabas path attribution).
 // - knn_anomaly:   first-visit anomaly detector (mean distance to the k nearest reference reports, Farrell 2024 style).
 // Scores are detector scores inside the synthetic evaluation scope, NOT probabilities that a result is safe.
 // Missing values are never imputed: a missing input follows the tree's learned "missing" branch, and a model whose
@@ -8,23 +8,15 @@ import { extractFeatures, featureLabel, coverage, MODEL_TESTS } from './features
 
 export function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
 const isMissing = v => v == null || !Number.isFinite(v);
-const K_ZERO = 1e-35; // LightGBM kZeroThreshold
-
 /**
- * Next node of one split. Two split semantics, exactly as the libraries implement them:
- *  - XGBoost ('<'):  value is cast to float32, missing → node.miss, else fround(value) < threshold ? yes : no.
- *  - LightGBM ('<='): missing_type 'nan' → NaN takes the default branch; 'zero' → 0 (and NaN, cast to 0) takes it;
- *                     'none' → NaN is treated as 0. Otherwise value <= threshold (double) ? left : right.
+ * Next node of one XGBoost split, exactly as the library evaluates it: the value is cast to float32,
+ * a missing value follows the learned default branch (node.miss), else fround(value) < threshold ? yes : no.
+ * (LightGBM was benchmarked but is not deployed, so its split semantics are not implemented here.)
  */
 export function nextNode(n, value) {
-  if (n.op === '<') {
-    if (isMissing(value)) return n.miss;
-    return Math.fround(value) < n.t ? n.l : n.r;
-  }
-  let v = isMissing(value) ? NaN : value;
-  if (n.mt !== 'nan' && Number.isNaN(v)) v = 0;
-  if ((n.mt === 'zero' && Math.abs(v) <= K_ZERO) || (n.mt === 'nan' && Number.isNaN(v))) return n.dl ? n.l : n.r;
-  return v <= n.t ? n.l : n.r;
+  if (n.op !== '<') throw new Error('Định dạng cây chưa hỗ trợ (chỉ XGBoost)');
+  if (isMissing(value)) return n.miss;
+  return Math.fround(value) < n.t ? n.l : n.r;
 }
 
 /**
@@ -99,6 +91,8 @@ export function scoreReport(report, history, catalog, model) {
   const base = { threshold: model.threshold, version: model.version, coverage: cov, history: hist, score: null, flagged: false, top: [] };
   if (model.scope === 'noHistory90d' && feats.hist_avail) return { ...base, status: 'OUT_OF_SCOPE', inScope: false,
     reason: 'Người bệnh có lịch sử ≤90 ngày: delta check và các rule lịch sử đánh giá, mô hình người khám lần đầu không áp dụng.' };
+  if (model.scope === 'history' && !feats.hist_avail) return { ...base, status: 'OUT_OF_SCOPE', inScope: false,
+    reason: 'Không có lịch sử ≤90 ngày để so sánh: mô hình nhầm mẫu không áp dụng (không thay rule; người khám lần đầu do mô hình bất thường và rule CHEM-H02 đảm nhận).' };
   const needed = model.kind === 'knn_anomaly' ? model.inputs : (model.keyTests ?? []).map(t => `m_${t}`);
   const absent = needed.filter(f => model.kind === 'knn_anomaly' ? isMissing(feats[f]) : feats[f] !== 1);
   if (absent.length) return { ...base, status: 'NOT_EVALUABLE', inScope: false,

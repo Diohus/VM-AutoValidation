@@ -274,11 +274,22 @@ test('a diagnosis alone never changes the personal interval', () => {
   assert.equal(b.decision, DECISIONS.REVIEW);
 });
 
-test('WBIT is out of scope: no WBIT model rule remains in either ruleset', () => {
-  for (const rs of Object.values(rulesets)) {
-    assert.ok(!rs.rules.some(r => /wbit/i.test(r.params?.model ?? '') || r.code.endsWith('-M01')), rs.rulesetId);
+test('WBIT models are back (user decision): escalate-only, history-scoped, delta check kept', () => {
+  for (const [rs, code, key] of [[rulesets.CHEM, 'CHEM-M01', 'chem_wbit'], [rulesets.HEME, 'HEME-M01', 'heme_wbit']]) {
+    const r = rs.rules.find(x => x.code === code);
+    assert.equal(r.params.model, key); assert.equal(r.onFail, 'REVIEW');
+    assert.ok(rs.rules.some(x => x.type === 'delta_check'), 'delta check kept');
   }
-  assert.ok(rulesets.CHEM.rules.some(r => r.type === 'delta_check') && rulesets.HEME.rules.some(r => r.type === 'delta_check'), 'delta check kept');
+  const W = 'chem_wbit';
+  const always = stub(W, 20, { scope: 'history', keyTests: [] });
+  const noHist = run(report('CHEM_EXT'), { models: { [W]: always } });
+  assert.equal(check(noHist, 'CHEM-M01').status, 'NOT_APPLICABLE');            // no history → not applied, not a pass
+  assert.match(check(noHist, 'CHEM-M01').message, /Không có lịch sử/);
+  assert.equal(noHist.decision, DECISIONS.AUTO);
+  const prev = [{ test: 'K', value: 4.2, unit: 'mmol/L', measuredAt: '2026-11-10T08:00:00+07:00' }];
+  const withHist = run(report('CHEM_EXT'), { models: { [W]: always }, history: prev });
+  assert.equal(check(withHist, 'CHEM-M01').status, 'FAIL');
+  assert.equal(withHist.decision, DECISIONS.REVIEW);
 });
 
 test('a result of 0 is a real value: finite features, never treated as missing', () => {

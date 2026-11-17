@@ -77,8 +77,11 @@ if (existsSync(root + 'reports/benchmark.json')) {
     addedCatchOfRuleMissed: r.vsRuleOnly?.addedCatchOfRuleMissed, extraFalseAlarmOnCleanRuleAuto: r.vsRuleOnly?.extraFalseAlarmOnCleanRuleAuto,
     ppvAtAssumedPrevalence: r.test.ppvAtAssumedPrevalence } : null;
   benchmark = {
-    disclaimer: b.disclaimer, data: b.data, chosenAlgorithmByTrainCvAp: b.chosenAlgorithmByTrainCvAp,
-    notDeployed: { chem_edta: 'Rule K–Ca đã bắt 100% trên tập test giả lập; giữ bằng rule.', chem_analytical: 'Ở ngưỡng recall 80%, thêm 47% báo động giả.', heme_analytical: 'Thêm 12% báo động giả; chưa đủ lợi.' },
+    disclaimer: b.disclaimer, data: b.data, deployed: b.deployed,
+    selection: Object.fromEntries(Object.entries(b.selection).map(([k, v]) => [k, { chosen: v.chosen, default: v.default, reason: v.reason }])),
+    contaminationSplitVsCombined: { chosen: b.contaminationSplitVsCombined.chosen, reason: b.contaminationSplitVsCombined.reason,
+      combined_PR2: b.contaminationSplitVsCombined.combined_PR2.test, split: b.contaminationSplitVsCombined.split_rule_EDTA_plus_ivfluid.test },
+    notDeployed: { chem_edta: 'Rule K–Ca đã bắt hết trên tập test giả lập; giữ bằng rule.', chem_analytical: 'Quá nhiều báo động giả ở ngưỡng recall 80%.', heme_analytical: 'Báo động giả thêm cao; chưa đủ lợi.', chem_contam: 'Mô hình gộp của PR #2: xem so sánh tách/gộp.' },
     detectors: Object.fromEntries(Object.entries(b.supervised).map(([k, d]) => [k, { name: d.name, targets: d.targets, split: d.split,
       algorithms: Object.fromEntries(Object.entries(d.configs.best_per_algorithm).map(([a, r]) => [a, pick(r)])),
       sameInput: Object.fromEntries(Object.entries(d.configs.same_input).map(([a, r]) => [a, pick(r)])) }])),

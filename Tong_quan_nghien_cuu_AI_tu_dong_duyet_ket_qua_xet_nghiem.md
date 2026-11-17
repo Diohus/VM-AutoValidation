@@ -22,7 +22,7 @@ Chưa có nghiên cứu nào công bố một hệ thống ML tự ký cho toàn
 
 ## Cập nhật áp dụng vào prototype
 
-Prototype không mô phỏng nhầm mẫu (WBIT), vì mẫu có SID định danh. Hai phương pháp trong tổng quan được thử trên dữ liệu giả lập: phát hiện bất thường đa biến cho người khám lần đầu (KNN, theo Farrell 2024, CCLM) và mô hình có giám sát trên nhiễm dịch truyền mô phỏng (theo hướng của Spies 2025, Clinical Chemistry; ở đây dùng LightGBM). Nhiễm EDTA vẫn bắt bằng luật K–Ca. So sánh logistic regression, XGBoost và LightGBM nằm ở `reports/benchmark.json`; đánh giá toàn luồng ở `reports/evaluation-comparison.json`. Đây là chuyển phương pháp để thử tính áp dụng, không tái tạo mô hình hay dữ liệu nghiên cứu, và không dùng để khẳng định hiệu quả lâm sàng.
+Prototype thử các phương pháp trong tổng quan trên dữ liệu giả lập: XGBoost cho nhầm mẫu (WBIT) hóa sinh và CBC khi có lịch sử ≤90 ngày (theo hướng Graham 2025 và Tortosa-Carreres; cấu hình do đồng đội chọn trong PR #2), XGBoost có giám sát trên nhiễm dịch truyền mô phỏng (theo hướng Spies 2025, Clinical Chemistry), và phát hiện bất thường đa biến cho người khám lần đầu (KNN, theo Farrell 2024, CCLM). Nhiễm EDTA vẫn bắt bằng luật K–Ca. So sánh logistic regression, XGBoost và LightGBM nằm ở `reports/benchmark.json`; đánh giá toàn luồng ở `reports/evaluation-comparison.json`. Đây là chuyển phương pháp để thử tính áp dụng, không tái tạo mô hình hay dữ liệu nghiên cứu, và không dùng để khẳng định hiệu quả lâm sàng.
 
 ## Phạm vi và mức độ đọc
 

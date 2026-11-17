@@ -41,7 +41,7 @@ const REASON_TXT = {
 const ACTION_LABEL = { APPROVE: 'Duyệt & ký', HOLD: 'Giữ lại', REQUEST_CHECK: 'Yêu cầu kiểm tra', NOTIFY_CRITICAL: 'Đã báo tới hạn', AUTO_APPROVE: 'Hệ thống tự duyệt' };
 const VERIFY_TXT = { NOT_VERIFIED: 'Chưa xác minh', RERUN_SAME: 'Chạy lại: kết quả tương tự', RERUN_DIFFERENT: 'Chạy lại: kết quả khác biệt', RECOLLECT_DIFFERENT: 'Mẫu mới: kết quả khác biệt', RECOLLECT_SAME: 'Mẫu mới: kết quả tương tự', CLINICAL_CONFIRMED: 'Khoa lâm sàng xác nhận phù hợp' };
 const SEND_TXT = { SENDING: ['info', 'Đang gửi, chờ ACK'], ACKED: ['auto', 'Đã ký/gửi (có ACK)'], FAILED: ['blocked', 'Gửi thất bại'], SUPERSEDED: ['neutral', 'Đã có phiên bản mới'] };
-const ERR_TXT = { analytical_single: 'Lỗi phân tích đơn chỉ số', edta: 'Nhiễm EDTA', saline: 'Lẫn NaCl 0,9%', d5w: 'Lẫn glucose 5%', hemolysis: 'Tan máu', delayed: 'Chậm xử lý mẫu', qc_window: 'Đo khi QC không đạt', plt_clump: 'Tiểu cầu kết cụm', clot: 'Cục đông', short_sample: 'Thiếu thể tích mẫu' };
+const ERR_TXT = { wbit: 'Nhầm mẫu (WBIT)', analytical_single: 'Lỗi phân tích đơn chỉ số', edta: 'Nhiễm EDTA', saline: 'Lẫn NaCl 0,9%', d5w: 'Lẫn glucose 5%', hemolysis: 'Tan máu', delayed: 'Chậm xử lý mẫu', qc_window: 'Đo khi QC không đạt', plt_clump: 'Tiểu cầu kết cụm', clot: 'Cục đông', short_sample: 'Thiếu thể tích mẫu' };
 const TITLES = { worklist: 'Hàng đợi duyệt', try: 'Nhập thử kết quả', eval: 'Đánh giá mô hình', feedback: 'Phản hồi chuyên môn', audit: 'Nhật ký', rules: 'Rule & cấu hình' };
 
 let meta, worklist = [], selected = null, current = null, decisionFilter = 'ACTION';
@@ -474,12 +474,12 @@ async function renderEval() {
     </div>`;
   };
   const B = E.benchmark;
-  const algoName = { logreg: 'Logistic regression', xgboost: 'XGBoost', lightgbm: 'LightGBM', gaussian: 'Gaussian đa biến', knn: 'KNN', ocsvm: 'One-class SVM' };
+  const algoName = { logreg: 'Logistic regression', xgboost: 'XGBoost (CV)', xgb_teammate: 'XGBoost — cấu hình PR #2', lightgbm: 'LightGBM', gaussian: 'Gaussian đa biến', knn: 'KNN', ocsvm: 'One-class SVM' };
   const brow = (name, r) => r ? `<tr><td>${name}</td><td class="num">${num(r.prAuc)}</td><td class="num">${pct(r.sensitivity?.value)}</td><td class="num">${r.addedCatchOfRuleMissed ? `${r.addedCatchOfRuleMissed.k}/${r.addedCatchOfRuleMissed.n}` : '—'}</td><td class="num">${r.extraFalseAlarmOnCleanRuleAuto ? pct(r.extraFalseAlarmOnCleanRuleAuto.value) : '—'}</td></tr>` : '';
   const bhead = '<thead><tr><th>Thuật toán</th><th class="num">PR-AUC</th><th class="num">Độ nhạy</th><th class="num">Bắt thêm (rule bỏ sót)</th><th class="num">Báo động giả thêm</th></tr></thead>';
   const bench = !B ? '' : `<h3 class="section-h">Benchmark ngoại tuyến (Python): so sánh thuật toán</h3>
     <div class="notice">${esc(B.disclaimer)} ${esc(B.data.note)} Mô hình đang nạp: ${loaded.length ? loaded.map(m => `<span class="mono small">${esc(m.key)}</span>`).join(', ') : '<b>không có — app đang chạy chỉ bằng rule</b>'}. Không triển khai: ${Object.entries(B.notDeployed).map(([k, t]) => `<span class="mono small">${esc(k)}</span> (${esc(t)})`).join('; ')}</div>
-    <div class="grid-2">${Object.entries(B.detectors).map(([k, d]) => `<div class="card"><h3>${esc(d.name)}</h3><p class="muted small">Test: ${d.split.test.n} phiếu, ${d.split.test.positives} ca dương tính. Chọn theo CV trên train: <b>${algoName[B.chosenAlgorithmByTrainCvAp[k]]}</b>.</p>
+    <div class="grid-2">${Object.entries(B.detectors).map(([k, d]) => `<div class="card"><h3>${esc(d.name)}</h3><p class="muted small">Test: ${d.split.test.n} phiếu, ${d.split.test.positives} ca dương tính. Được chọn: <b>${esc(algoName[B.selection[k]?.chosen] ?? '—')}</b>${B.deployed[k] ? ' (đang dùng)' : ' (không triển khai)'}. <span class="muted">${esc(B.selection[k]?.reason ?? '')}</span></p>
       <div class="tablewrap"><table class="results">${bhead}<tbody>${Object.entries(d.algorithms).map(([al, r]) => brow(algoName[al], r)).join('')}</tbody></table></div></div>`).join('')}</div>
     <h3 class="section-h">Phát hiện bất thường — người khám lần đầu (ngưỡng gắn cờ 5%)</h3>
     <div class="grid-3">${Object.entries(B.firstVisitAnomaly).map(([pn, d]) => `<div class="card"><h3>${esc(pn)}</h3><p class="muted small">${d.testFirstVisit} phiếu không có lịch sử ≤90 ngày, ${d.testPositives} ca nhiễm mẫu/lỗi phân tích.</p>

@@ -107,9 +107,15 @@ Cho từng bộ × thuật toán, trên test:
 | 10 | `analytical_single` dễ tạo benchmark tự đúng; HCT nằm ngoài `MODEL_TESTS`. | Độ lệch rộng 8–60% (gồm lệch nhỏ), báo recall theo mức lệch. Train/val không tiêm vào ALT, MG, PLT, RDW; test tiêm vào mọi chỉ số → báo recall riêng trên chỉ số chưa thấy. Thêm HCT vào `MODEL_TESTS`. Báo `qc_window` riêng, không gộp vào recall. |
 | 11 | Bản xuất cây cho JS thiếu thông tin. | Dùng XGBoost JSON đầy đủ (base_score, objective, nhánh thiếu). Không áp `Math.fround` đồng loạt cho LightGBM. OCSVM xuất cả intercept/offset. KNN benchmark trên đúng tập con sẽ triển khai. Test so khớp gồm biên split, 0, thiếu, sát ngưỡng. |
 
-## 10. Bước 3 — đã triển khai (17/11/2026)
+## 10. Bước 3 — đã triển khai (17/11/2026; mục 11 thay đổi một phần)
 - Gộp `origin/main` (PR #2). Gỡ `chem_wbit_xgb`, `heme_wbit_xgb`, `chem_contam_xgb` và mọi LR cũ; dùng chung, tổng quát hóa bộ chấm điểm cây JSON của PR #2 cho XGBoost (so sánh float32) và LightGBM (missing type), có giải thích Saabas.
 - Mô hình triển khai: `chem_ivfluid` (LightGBM), `fv_chem_basic` / `fv_chem_ext` / `fv_cbc` (KNN, chỉ khi không có lịch sử ≤90 ngày). EDTA: rule. Lỗi phân tích đơn chỉ số: không triển khai.
 - `ml/train_runtime.py` huấn luyện đúng cấu hình đã benchmark (assert cùng PR-AUC val và cùng ngưỡng) và xuất `tests/fixtures/model-parity.json`; `tests/model.test.js` kiểm điểm JS khớp thư viện.
 - Server không gọi Python; thiếu mô hình → chỉ rule, ghi rõ. Báo cáo đánh giá duy nhất: `reports/evaluation-comparison.json` (toàn luồng trên bộ demo độc lập + tóm tắt benchmark), có dấu vân tay để phát hiện báo cáo cũ.
 - `firstVisitAbnormalPolicy` trong CHEM-H02: app chỉ chạy `ALWAYS_REVIEW`; giá trị khác vẫn giữ phiếu. `MODEL_FLAG_ONLY` chỉ có trong benchmark (đề xuất chờ khoa).
+
+## 11. Đổi quyết định: giữ phần của đồng đội nếu không bị vượt rõ (17/11/2026)
+- Quyết định 0.1 ("không mô hình hóa WBIT") **bị thay**: WBIT được tiêm lại (3%, tráo cùng tập/panel, ≤3 giờ) và có mô hình WBIT hóa sinh/CBC, chỉ khi có lịch sử ≤90 ngày, chỉ nâng lên REVIEW (CHEM-M01, HEME-M01).
+- Quy tắc chọn (chốt trước, chạy trên **validation**): cấu hình XGBoost của PR #2 (depth 3, 200 cây, eta 0,05, `scale_pos_weight` = âm/dương, đặc trưng như `train-xgb.mjs` @ a3d90ca) là mặc định; chỉ thay khi phương án khác tốt hơn rõ (CI PR-AUC không chồng, hoặc bắt thêm chênh rõ mà báo động giả không tệ hơn rõ). Ngang nhau → của đồng đội. Cài đặt: `select_models`, `clearly_better` trong `ml/benchmark.py`; có test.
+- Kết quả: WBIT hóa sinh, WBIT CBC, lẫn dịch truyền → XGBoost cấu hình PR #2. Mô hình nhiễm mẫu gộp của PR #2 không tốt hơn rõ cách tách → giữ tách (EDTA bằng rule).
+- Runtime không còn LightGBM → gỡ nhánh LightGBM khỏi bộ chấm điểm JS và exporter; `lightgbm` vẫn trong `requirements.txt` vì benchmark cần.

@@ -51,7 +51,25 @@ PANEL_TESTS = {
 CONTAM_ANALYTICAL = frozenset({"edta", "saline", "d5w", "analytical_single"})
 AUTO = "AUTO_APPROVE_ELIGIBLE"
 
+# Teammate's feature subsets (PR #2, commit a3d90ca, scripts/train-xgb.mjs), applied to this branch's feature names.
+# NOTE: an ADAPTED variant — PR #2's parameters and feature filters applied to this branch's extractor (zero kept as a real
+# value, no imputation, HCT, m_* flags, allow-list column order). The PR #2 extractor itself is not reproduced because it
+# contains exactly what decisions 2–3 removed (0 → missing, age default 50, mean imputation).
+TEAM_HIST = {"hist_avail", "n_deltas", "delta_ms", "delta_max_abs", "log_days_since_prev", "acute_setting", "recent_transfusion"}
+TEAM_KEEP = {
+    "chem_wbit": lambda f: f.startswith("ad_") or f in TEAM_HIST,
+    "heme_wbit": lambda f: f.startswith("d_") or f.startswith("ad_") or f in TEAM_HIST,
+    "chem_contam": lambda f: not f.startswith("ad_"),
+    "chem_ivfluid": lambda f: not f.startswith("ad_"),
+}
+
 DETECTORS = [
+    dict(key="chem_wbit", discipline="CHEM", name="Nhầm mẫu (WBIT) — hóa sinh", targets=frozenset({"wbit"}), recall=0.80, key_tests=[], min_tests=0,
+         requires_history=True),
+    dict(key="heme_wbit", discipline="HEME", name="Nhầm mẫu (WBIT) — CBC", targets=frozenset({"wbit"}), recall=0.80, key_tests=[], min_tests=0,
+         requires_history=True),
+    dict(key="chem_contam", discipline="CHEM", name="Nhiễm mẫu gộp (EDTA + NaCl 0,9% + glucose 5%) — cách của PR #2", targets=frozenset({"edta", "saline", "d5w"}),
+         recall=0.90, key_tests=[], min_tests=0),
     dict(key="chem_edta", discipline="CHEM", name="Nhiễm EDTA", targets=frozenset({"edta"}), recall=0.90, key_tests=["K", "CA"], min_tests=0),
     dict(key="chem_ivfluid", discipline="CHEM", name="Lẫn dịch truyền (NaCl 0,9% / glucose 5%)", targets=frozenset({"saline", "d5w"}),
          recall=0.90, key_tests=["NA", "CL", "GLU"], min_tests=0),
@@ -203,8 +221,10 @@ def feature_columns(train: Frame, discipline: str, drop_acute: bool = False):
 
 
 def in_key_scope(df: Frame, det) -> np.ndarray:
-    """Key features present → evaluable. Otherwise NOT_EVALUABLE (never PASS)."""
+    """Key features present → evaluable. Otherwise NOT_EVALUABLE (never PASS). WBIT models need history ≤90 days."""
     ok = np.ones(len(df), dtype=bool)
+    if det.get("requires_history"):
+        ok &= df["hist"] == 1
     for t in det["key_tests"]:
         ok &= df[f"f_m_{t}"] == 1
     if det["min_tests"]:
@@ -271,8 +291,15 @@ class Native:
         return self.model.predict_proba(df.matrix(self.cols))[:, 1]
 
 
+TEAM_XGB = dict(max_depth=3, n_estimators=200, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8, reg_lambda=1.0, seed=20261116)
+
+
 def maker(algo, hp, pos_ratio):
     spw = float(min(25.0, max(1.0, pos_ratio / 4)))
+    if algo == "xgb_teammate":  # scripts/train-xgb.py @ a3d90ca: depth 3, 200 rounds, eta 0.05, scale_pos_weight = neg/pos, nthread 1
+        return lambda: xgb.XGBClassifier(max_depth=3, n_estimators=200, learning_rate=0.05, subsample=0.8, colsample_bytree=0.8,
+                                         reg_lambda=1.0, scale_pos_weight=float(max(1.0, pos_ratio)), tree_method="hist",
+                                         eval_metric="logloss", random_state=20261116, n_jobs=1, verbosity=0)
     if algo == "logreg":
         return lambda: make_pipeline(StandardScaler(), LogisticRegression(C=hp["C"], max_iter=3000, class_weight="balanced"))
     if algo == "xgboost":
@@ -288,6 +315,8 @@ def maker(algo, hp, pos_ratio):
 
 def build(algo, config, hp, cols, pos_ratio):
     mk = maker(algo, hp, pos_ratio)
+    if algo == "xgb_teammate":
+        return Native(mk, cols)
     if config == "same_input" or algo == "logreg":
         return Stratified(mk, cols)
     return Native(mk, cols)
@@ -426,12 +455,19 @@ def run_supervised(df, ablation_drop_acute=False, boot=True):
             det_res["warning"] = f"Chỉ có {int(yva.sum())} ca dương tính ở val — ngưỡng không tin cậy."
         for config in ("best_per_algorithm", "same_input"):
             det_res["configs"][config] = {}
-            for algo in ("logreg", "xgboost", "lightgbm"):
+            algos = ("logreg", "xgboost", "lightgbm") + (("xgb_teammate",) if config == "best_per_algorithm" and det["key"] in TEAM_KEEP else ())
+            for algo in algos:
                 if config == "same_input" and algo == "logreg":
                     det_res["configs"][config][algo] = {"sameAs": "best_per_algorithm.logreg (LR luôn theo tầng panel × lịch sử)"}
                     continue
-                hp, table, pos_ratio = cv_select(algo, config, cols, tr, ytr)
-                model = build(algo, config, hp, cols, pos_ratio).fit(tr, ytr)
+                if algo == "xgb_teammate":
+                    acols = [c for c in cols if TEAM_KEEP[det["key"]](c[2:])]
+                    pos_ratio = (len(ytr) - ytr.sum()) / max(1, ytr.sum())
+                    hp, table = dict(TEAM_XGB), [{"cv_ap": None, "note": "cấu hình cố định của PR #2, không CV"}]
+                else:
+                    acols = cols
+                    hp, table, pos_ratio = cv_select(algo, config, cols, tr, ytr)
+                model = build(algo, config, hp, acols, pos_ratio).fit(tr, ytr)
                 sva = model.predict(va)
                 okv = ~np.isnan(sva)
                 thr = pick_threshold(sva[okv], yva[okv], det["recall"])
@@ -440,7 +476,7 @@ def run_supervised(df, ablation_drop_acute=False, boot=True):
                 flagged = (~np.isnan(ste)) & (np.nan_to_num(ste, nan=-np.inf) >= (thr if thr is not None else np.inf))
                 target = yte == 1
                 res = {
-                    "hyperparameters": hp, "cvTable": table,
+                    "hyperparameters": hp, "cvTable": table, "features": acols,
                     "validation": {"positives": int(yva[okv].sum()), "n": int(okv.sum()),
                                    "prAuc": float(average_precision_score(yva[okv], sva[okv])) if 0 < yva[okv].sum() < okv.sum() else None},
                     "thresholdSelection": f"Ngưỡng lớn nhất sao cho điểm ≥ ngưỡng đạt recall ≥ {det['recall']:.0%} trên {int(yva[okv].sum())} ca dương tính val",
@@ -453,7 +489,13 @@ def run_supervised(df, ablation_drop_acute=False, boot=True):
                         res["analyticalBreakdown"] = analytical_breakdown(te, flagged)
                 det_res["configs"][config][algo] = res
                 if config == "best_per_algorithm":
-                    flags.setdefault(det["key"], {})[algo] = (te["_row"], flagged, max(r["cv_ap"] for r in table))
+                    vflag = okv & (np.nan_to_num(sva, nan=-np.inf) >= (thr if thr is not None else np.inf))
+                    # Only EVALUABLE reports are stored; a report missing a key input is held at runtime (NOT_EVALUABLE → REVIEW),
+                    # a report out of a history-scoped model's scope is not (OUT_OF_SCOPE → not applicable).
+                    flags.setdefault(det["key"], {})[algo] = dict(test_rows=te["_row"][te_key], test_flag=flagged[te_key],
+                                                                  missing_held=bool(det["key_tests"] or det["min_tests"]),
+                                                                  val_rows=va["_row"], val_flag=vflag,
+                                                                  val_scores=sva, val_y=yva, cv=max((r["cv_ap"] or -1) for r in table))
         results[det["key"]] = det_res
         print(f"  {det['key']:16s} {time.time() - t0:6.1f}s", flush=True)
     return results, flags
@@ -572,6 +614,96 @@ def first_visit_policy(df, anomaly_flags, model_name):
     }
 
 
+def val_evidence(df, rows, flag, scores, y, targets):
+    """Validation evidence for one candidate: PR-AUC with subject-bootstrap CI, and added catches / extra false alarms vs rule-only.
+    Empty or all-NaN input → no evidence (None / empty CIs), which never counts as 'clearly better'."""
+    if not len(rows):
+        return {"prAuc": None, "prAuc_ci95": [None, None], "added": rate(0, 0), "falseAlarm": rate(0, 0)}
+    sub = df.sub(np.isin(df["_row"], rows))
+    order = {r: i for i, r in enumerate(rows)}
+    idx = np.array([order[r] for r in sub["_row"]])
+    s, yy, f = scores[idx], y[idx], flag[idx]
+    ok = ~np.isnan(s)
+    boots = [average_precision_score(yy[ok][i], s[ok][i]) for i in subject_boot_indices(sub["meta_subject"][ok], 500)
+             if 0 < yy[ok][i].sum() < len(i)] if ok.any() else []
+    inc = incremental(sub, f, has_any(sub["errors"], targets), n_boot=1)
+    return {"prAuc": float(average_precision_score(yy[ok], s[ok])) if 0 < yy[ok].sum() < ok.sum() else None, "prAuc_ci95": boot_ci(boots),
+            "added": inc["addedCatchOfRuleMissed"], "falseAlarm": inc["extraFalseAlarmOnCleanRuleAuto"]}
+
+
+def clearly_better(a, b):
+    """a clearly better than b: PR-AUC CIs do not overlap, or the added-catch Wilson CIs do not overlap
+    without a clearly worse false-alarm rate. Ties → keep b (the default)."""
+    def above(x, y):  # lower bound of x above upper bound of y; missing evidence → False (keep the default)
+        return x[0] is not None and y[1] is not None and x[0] > y[1]
+    pr = above(a["prAuc_ci95"], b["prAuc_ci95"])
+    ad = bool(a["added"]["n"] and b["added"]["n"]) and above(a["added"]["ci95_wilson"], b["added"]["ci95_wilson"])
+    fa_worse = above(a["falseAlarm"]["ci95_wilson"], b["falseAlarm"]["ci95_wilson"])
+    return bool(pr or (ad and not fa_worse))
+
+
+def select_models(df, sup_flags):
+    """Pre-registered rule (user, 17/11/2026): the teammate's choice (PR #2: XGBoost, fixed config) is the default where it
+    exists; another algorithm replaces it only if CLEARLY better on validation. Elsewhere: best train-CV AP.
+    Decided on validation only; the test split is reported, never used to choose."""
+    out = {}
+    for key, cands in sup_flags.items():
+        det = next(d for d in DETECTORS if d["key"] == key)
+        ev = {a: val_evidence(df, c["val_rows"], c["val_flag"], c["val_scores"], c["val_y"], det["targets"]) for a, c in cands.items()}
+        if "xgb_teammate" in cands:
+            default = "xgb_teammate"
+            better = [a for a in cands if a != default and clearly_better(ev[a], ev[default])]
+            chosen = max(better, key=lambda a: ev[a]["prAuc"] or -1) if better else default
+            reason = (f"{chosen} tốt hơn rõ cấu hình PR #2 trên val" if better else
+                      "Không phương án nào tốt hơn rõ cấu hình PR #2 trên val (CI chồng lên nhau) → giữ lựa chọn của đồng đội")
+        else:
+            chosen = max(cands, key=lambda a: cands[a]["cv"])
+            reason = "Không có mô hình của đồng đội cho họ lỗi này → thuật toán có AP CV trên train cao nhất"
+        out[key] = {"chosen": chosen, "default": "xgb_teammate" if "xgb_teammate" in cands else None, "reason": reason, "validation": ev}
+    return out
+
+
+def aligned_flags(base_rows, cand_rows, cand_flag, missing_as):
+    """Flags of one candidate on base_rows (same order); rows the candidate did not evaluate get `missing_as`."""
+    pos = {int(r): i for i, r in enumerate(cand_rows)}
+    return np.array([bool(cand_flag[pos[int(r)]]) if int(r) in pos else missing_as for r in base_rows])
+
+
+def split_vs_combined(df, sup_flags, selection):
+    """PR #2's single combined contamination model vs this branch's split (EDTA by rule + IV-fluid model): same targets,
+    same reports (every valid CHEM report of the split), same denominators. A report the IV-fluid model cannot evaluate is
+    held, as the runtime does (NOT_EVALUABLE → REVIEW). Default (instruction of 17/11/2026): split; combined replaces it
+    only if clearly better on VALIDATION."""
+    targets = frozenset({"edta", "saline", "d5w"})
+    comb = sup_flags["chem_contam"][selection["chem_contam"]["chosen"]]
+    split = sup_flags["chem_ivfluid"][selection["chem_ivfluid"]["chosen"]]
+    res = {}
+    for part, rows_key, flag_key in (("validation", "val_rows", "val_flag"), ("test", "test_rows", "test_flag")):
+        base = comb[rows_key]  # all valid CHEM reports of this split (the combined model has no key inputs)
+        sub = df.sub(np.isin(df["_row"], base))
+        order = sub["_row"]
+        for name, c in (("combined_PR2", comb), ("split_rule_EDTA_plus_ivfluid", split)):
+            f = aligned_flags(order, c[rows_key], c[flag_key], c["missing_held"])
+            res.setdefault(name, {"model": "chem_contam/" + selection["chem_contam"]["chosen"] if name == "combined_PR2"
+                                  else "chem_ivfluid/" + selection["chem_ivfluid"]["chosen"]})
+            res[name][part] = incremental(sub, f, has_any(sub["errors"], targets), n_boot=1 if part == "validation" else 500)
+            res[name][part + "NotEvaluableHeld"] = int(len(order) - np.isin(order, c[rows_key]).sum())
+    return decide_split_vs_combined(res)
+
+
+def decide_split_vs_combined(res):
+    ev = {n: {"prAuc_ci95": [None, None], "added": res[n]["validation"]["addedCatchOfRuleMissed"],
+              "falseAlarm": res[n]["validation"]["extraFalseAlarmOnCleanRuleAuto"]} for n in ("combined_PR2", "split_rule_EDTA_plus_ivfluid")}
+    better = clearly_better(ev["combined_PR2"], ev["split_rule_EDTA_plus_ivfluid"])
+    res["chosen"] = "combined_PR2" if better else "split_rule_EDTA_plus_ivfluid"
+    res["reason"] = ("Mô hình gộp bắt thêm rõ hơn trên val" if better else
+                     "Mô hình gộp không tốt hơn rõ trên val (mục tiêu EDTA + NaCl + glucose 5%, cùng phiếu, so với chỉ-rule) → giữ cách tách")
+    return res
+
+
+DEPLOYED_SUPERVISED = ("chem_wbit", "heme_wbit", "chem_ivfluid")
+
+
 def combined(df, sup_flags, choice, anomaly_flags):
     """Rules + every chosen supervised detector (union, counted once) + first-visit anomaly model."""
     out = {}
@@ -582,15 +714,17 @@ def combined(df, sup_flags, choice, anomaly_flags):
         for key, algo in choice.items():
             if not key.startswith(disc.lower()):
                 continue
-            rows, f, _ = sup_flags[key][algo]
-            for r, ff in zip(rows, f):
+            c = sup_flags[key][algo]
+            d_rows = te["_row"][te["no_data_issue"]]  # the detector's population; data-issue reports are blocked by rules anyway
+            f = aligned_flags(d_rows, c["test_rows"], c["test_flag"], c["missing_held"])
+            for r, ff in zip(d_rows, f):
                 if ff:
                     sup[pos[int(r)]] = True
         both = sup.copy()
         for r, ff in anomaly_flags.items():
             if ff and r in pos:
                 both[pos[r]] = True
-        target = has_any(te["errors"], CONTAM_ANALYTICAL)
+        target = has_any(te["errors"], CONTAM_ANALYTICAL | {"wbit"})
         out[disc] = {"supervisedOnly": incremental(te, sup, target), "supervisedPlusFirstVisitAnomaly": incremental(te, both, target),
                      "byErrorType": by_error_type(te, both)}
     return out
@@ -623,14 +757,19 @@ def main():
     ano, ano_flags = run_anomaly(df)
     # Pre-specified: per detector, the algorithm with the best GroupKFold CV average precision on TRAIN (val only sets thresholds);
     # anomaly model: KNN (best overall in Farrell 2024), fixed before running.
-    choice = {k: max(v.items(), key=lambda kv: (kv[1][2] if kv[1][2] is not None else -1))[0] for k, v in sup_flags.items()}
+    selection = select_models(df, sup_flags)
+    contam = split_vs_combined(df, sup_flags, selection)
+    deployed = {k: selection[k]["chosen"] for k in DEPLOYED_SUPERVISED}
+    if contam["chosen"] == "combined_PR2":
+        deployed.pop("chem_ivfluid")
+        deployed["chem_contam"] = selection["chem_contam"]["chosen"]
     report = {
         "generatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
         "disclaimer": "Mọi con số chỉ đúng trên dữ liệu GIẢ LẬP (tỷ lệ lỗi làm giàu ≈10–50× thực tế, lỗi do chính generator tiêm vào). "
                       "Không phản ánh hiệu năng trên dữ liệu thật; không dùng làm tiêu chí nghiệm thu.",
         "data": {"features": Path(a.features).relative_to(ROOT).as_posix() if Path(a.features).is_relative_to(ROOT) else a.features,
                  "reports": int(len(df)), "splits": {s: int((df["meta_split"] == s).sum()) for s in ("train", "val", "test")},
-                 "note": "Bộ benchmark riêng: 10.000 người bệnh giả lập, seed 20261117, không có WBIT."},
+                 "note": "Bộ benchmark riêng: 10.000 người bệnh giả lập, seed 20261117, có mô phỏng WBIT (3%)."},
         "definitions": {
             "addedCatchOfRuleMissed": "Số lỗi mục tiêu rule cho AUTO nhưng mô hình gắn cờ / số lỗi mục tiêu rule cho AUTO",
             "addedCatchOfAllTarget": "Như trên nhưng mẫu số là toàn bộ lỗi mục tiêu",
@@ -644,9 +783,11 @@ def main():
         "ablationWithoutAcuteSetting_testPrAuc": {k: {c: {al: (v.get("test", {}).get("prAuc")) for al, v in cfg.items()} for c, cfg in d["configs"].items()}
                                                   for k, d in sup_abl.items()},
         "firstVisitAnomaly": ano,
-        "chosenAlgorithmByTrainCvAp": choice,
+        "selection": selection,
+        "contaminationSplitVsCombined": contam,
+        "deployed": deployed,
         "firstVisitPolicy": first_visit_policy(df, ano_flags["knn"], "knn"),
-        "combinedVsRuleOnly": combined(df, sup_flags, choice, ano_flags["knn"]),
+        "combinedVsRuleOnly": combined(df, sup_flags, deployed, ano_flags["knn"]),
     }
     report["runtimeSeconds"] = round(time.time() - t0, 1)
     Path(a.out).write_text(json.dumps(report, ensure_ascii=False, indent=1, default=to_json), encoding="utf-8")

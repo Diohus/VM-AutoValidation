@@ -1,6 +1,6 @@
 {
   "rulesetId": "HEME-AV",
-  "version": "heme-demo-1.3.0",
+  "version": "heme-demo-1.4.0",
   "discipline": "HEME",
   "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
   "approvedBy": null,
@@ -175,6 +175,19 @@
         "check": "mchc_range",
         "max": 370,
         "min": 290
+      }
+    },
+    {
+      "code": "HEME-M01",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 80,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "REVIEW",
+      "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
+      "reason": "MCV/RDW/MCH… lệch khỏi lịch sử vượt biến thiên trong cá thể (XGBoost, cấu hình PR #2). Chỉ chạy khi có lịch sử ≤90 ngày; không có lịch sử → không áp dụng (không thay cho rule). Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "params": {
+        "model": "heme_wbit"
       }
     },
     {

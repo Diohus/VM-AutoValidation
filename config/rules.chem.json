@@ -1,6 +1,6 @@
 {
   "rulesetId": "CHEM-AV",
-  "version": "chem-demo-1.3.0",
+  "version": "chem-demo-1.4.0",
   "discipline": "CHEM",
   "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
   "approvedBy": null,
@@ -283,6 +283,19 @@
     },
     
     {
+      "code": "CHEM-M01",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 80,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "REVIEW",
+      "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
+      "reason": "Độ lệch đa chỉ số so với lần trước bất thường so với biến thiên trong cá thể (XGBoost, cấu hình PR #2). Chỉ chạy khi có lịch sử ≤90 ngày; không có lịch sử → không áp dụng (không thay cho rule). Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "params": {
+        "model": "chem_wbit"
+      }
+    },
+    {
       "code": "CHEM-M02",
       "type": "model_score",
       "stage": "MODEL",
@@ -290,7 +303,7 @@
       "onFail": "REVIEW",
       "onNotEvaluable": "REVIEW",
       "name": "Mô hình phát hiện lẫn dịch truyền (NaCl 0,9% / glucose 5%) — chỉ được giữ thêm",
-      "reason": "LightGBM trên tổ hợp chỉ số (Na − Cl, glucose, mức pha loãng so với lần trước khi có). Cần Na, Cl, glucose; thiếu → không đánh giá được. Chỉ có quyền chuyển MANUAL_REVIEW. Nhiễm EDTA do rule CHEM-X01 đảm nhận (không dùng mô hình).",
+      "reason": "XGBoost (cấu hình PR #2) trên tổ hợp chỉ số (Na − Cl, glucose, mức pha loãng so với lần trước khi có). Cần Na, Cl, glucose; thiếu → không đánh giá được. Chỉ có quyền chuyển MANUAL_REVIEW. Nhiễm EDTA do rule CHEM-X01 đảm nhận (không dùng mô hình).",
       "params": {
         "model": "chem_ivfluid"
       }

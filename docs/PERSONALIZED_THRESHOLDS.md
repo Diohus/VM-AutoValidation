@@ -54,7 +54,7 @@ Các giới hạn cứng không bao giờ được nới:
 | Cá nhân: siết + nới | 82,6% | 29,5% | 6,6% |
 
 Cách đọc:
-- **Siết** bắt thêm lỗi (số liệu đo ở phiên bản có mô phỏng WBIT, nay đã gỡ; cần chạy lại): phần lớn là nhầm mẫu (WBIT) mà delta check 90 ngày không thấy, vì ngưỡng cá nhân nhìn lại tới 365 ngày. Cái giá phải trả là báo động giả tăng thêm khoảng 1,5–2,3 điểm.
+- **Siết** bắt thêm lỗi (số liệu đo ở phiên bản đầu của dữ liệu giả lập; xem tab Đánh giá mô hình cho số hiện tại): phần lớn là nhầm mẫu (WBIT) mà delta check 90 ngày không thấy, vì ngưỡng cá nhân nhìn lại tới 365 ngày. Cái giá phải trả là báo động giả tăng thêm khoảng 1,5–2,3 điểm.
 - **Nới** gần như không có tác dụng trên dữ liệu giả lập, vì rất ít người bệnh giả có từ 3 kết quả ổn định trở lên nằm ngoài giới hạn chung. Lợi ích của nới chỉ đánh giá được trên dữ liệu thật của nhóm bệnh mạn tính tái khám định kỳ (ví dụ lọc máu, bệnh thận mạn, thalassemia). Kịch bản **KB8** minh họa đúng trường hợp này.
 
 ## Rủi ro cần cân nhắc trước khi dùng thật

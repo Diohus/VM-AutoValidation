@@ -1,8 +1,7 @@
 // Synthetic LIS dataset generator. ALL DATA IS SYNTHETIC. Parameters are illustrative, not clinical.
 // Layers: individual set-point → time-varying biology/disease (AR(1) within-subject variation, CVi)
 //         → analytical error (CVa) → injected, labelled pre-analytical/analytical/data errors.
-// Splits are assigned per subject BEFORE error injection. Wrong-blood-in-tube (WBIT) is NOT simulated
-// (project decision 2026-11-17: specimens carry a positive SID; risk treated as negligible).
+// Splits are assigned per subject BEFORE error injection; WBIT swap partners share a split (same split, panel, ≤3 h).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRng, hashString } from '../src/core/rng.js';
@@ -26,8 +25,8 @@ const rng = createRng(SEED);
 // Error rates are deliberately ENRICHED (≈10–50× real-world) so the models see enough positives.
 // Real-world prevalence is handled at evaluation time (PPV at assumed prevalences, see ml/benchmark.py).
 const RATES = {
-  CHEM: { analytical_single: 0.01, edta: 0.01, saline_opd: 0.004, saline_ipd: 0.03, d5w_ipd: 0.012, short_sample: 0.003, unit: 0.003, missing: 0.008, delayed: 0.012, hil_missing: 0.006 },
-  HEME: { analytical_single: 0.01, plt_clump: 0.02, clot: 0.003, missing: 0.005, delayed: 0.006, variant_lymph: 0.02 }
+  CHEM: { wbit: 0.03, analytical_single: 0.01, edta: 0.01, saline_opd: 0.004, saline_ipd: 0.03, d5w_ipd: 0.012, short_sample: 0.003, unit: 0.003, missing: 0.008, delayed: 0.012, hil_missing: 0.006 },
+  HEME: { wbit: 0.03, analytical_single: 0.01, plt_clump: 0.02, clot: 0.003, missing: 0.005, delayed: 0.006, variant_lymph: 0.02 }
 };
 
 // ---------- time helpers (ISO with +07:00) ----------
@@ -389,9 +388,38 @@ function finalizeTruth(r) {
   const t = r.truth;
   t.requiresReview = !!(t.sampleError || t.dataIssue || t.criticalValue || t.pathologyFlag);
   // Simulated reviewer: "reviewer approved" ≠ "result was correct".
-  const pHold = t.sampleError ? ({ analytical_single: 0.5, edta: 0.85, saline: 0.7, d5w: 0.8, hemolysis: 0.95, qc_window: 0.97, delayed: 0.6, plt_clump: 0.9, clot: 0.97, short_sample: 0.97 }[t.sampleError] ?? 0.8)
+  const pHold = t.sampleError ? ({ wbit: 0.55, analytical_single: 0.5, edta: 0.85, saline: 0.7, d5w: 0.8, hemolysis: 0.95, qc_window: 0.97, delayed: 0.6, plt_clump: 0.9, clot: 0.97, short_sample: 0.97 }[t.sampleError] ?? 0.8)
     : t.dataIssue ? 0.99 : t.criticalValue ? 0.97 : t.pathologyFlag ? 0.9 : 0.05;
   r.reviewer = { action: rng.chance(pHold) ? 'HOLD' : 'APPROVE', simulated: true };
+}
+
+// ---------- WBIT swaps (within split, same panel, collected within ±3h, different subjects) ----------
+// Restored 17/11/2026 (user decision). Only error-free, data-clean reports take part, as in the original simulation.
+function injectWbit(reports) {
+  const groups = new Map();
+  for (const r of reports) {
+    if (r.split === 'scenario' || r.truth.errors.length || r.truth.dataIssue) continue;
+    const key = `${r.split}|${r.panel}|${r.specimen.collectedAt.slice(0, 10)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+  let n = 0;
+  for (const arr of groups.values()) {
+    for (let i = 0; i < arr.length; i++) {
+      const a = arr[i];
+      if (a.truth.errors.length || !rng.chance(RATES[a.discipline].wbit)) continue;
+      const ta = Date.parse(a.specimen.collectedAt);
+      const cands = arr.filter(b => b !== a && !b.truth.errors.length && b.subjectToken !== a.subjectToken && Math.abs(Date.parse(b.specimen.collectedAt) - ta) <= 3 * HOUR);
+      if (!cands.length) continue;
+      const b = rng.pick(cands);
+      // a's tube actually contains b's blood: a receives b's measured values (one-directional WBIT).
+      const bv = Object.fromEntries(b.results.map(x => [x.test, x.value]));
+      a.results.forEach(x => { if (x.test in bv && typeof x.value === 'number' && typeof bv[x.test] === 'number') x.value = bv[x.test]; });
+      markError(a, 'wbit', 'Nhầm mẫu (WBIT) mô phỏng: ống chứa máu của người bệnh khác cùng khung giờ');
+      n++;
+    }
+  }
+  return n;
 }
 
 // ---------- main simulation ----------
@@ -438,8 +466,9 @@ function simulate() {
       reports.push(r);
     }
   }
+  const nW = injectWbit(reports);
   for (const r of reports) { applyQcBias(r); finalizeTruth(r); }
-  return { subjects, reports };
+  return { subjects, reports, nW };
 }
 
 // ---------- pinned demo scenarios (hand-crafted, excluded from model evaluation) ----------
@@ -498,11 +527,11 @@ function scenarioReports() {
   mk(s, 'CHEM_EXT', '2026-11-13T08:30:00+07:00', { CRE: 71 });
   mk(s, 'CHEM_EXT', T('08:15'), { CRE: 158, URE: 5.2 }, { truth: { sampleError: null, requiresReview: true, details: 'Ca dựng sẵn: chưa rõ nguyên nhân, cần đối chiếu' },
     scenario: sc('KB3', 'Thay đổi so với lịch sử vượt điều kiện demo', 'MANUAL_REVIEW', 'Creatinine 71 → 158 µmol/L sau 3 ngày (+123%), ure gần như không đổi, không có bối cảnh nhập viện. Hệ thống chuyển kiểm tra; đây là lý do cần xem xét, chưa phải bằng chứng mẫu lỗi.') });
-  // 5. CBC: large change vs previous (cause not established) → delta check holds. WBIT is out of scope.
+  // 5. CBC WBIT-like change
   s = S(5, 'M', 39);
   mk(s, 'CBC', '2026-11-06T09:00:00+07:00', { MCV: 92.4, RDW: 12.6, MCH: 31.0, HGB: 151, RBC: 4.87, HCT: 0.45, MCHC: 336 });
-  mk(s, 'CBC', T('08:40'), { MCV: 77.8, RDW: 16.1, MCH: 24.9, HGB: 117, RBC: 4.70, HCT: 0.366, MCHC: 320, PLT: 331 }, { truth: { requiresReview: true, details: 'Thay đổi lớn so với lần trước, nguyên nhân chưa xác định' },
-    scenario: sc('KB3b', 'CBC thay đổi lớn so với lần trước (MCV/RDW)', 'MANUAL_REVIEW', 'MCV 92,4 → 77,8 fL, RDW 12,6 → 16,1% sau 10 ngày, không ghi nhận truyền máu. MCV/RDW/MCH là các chỉ số ổn định trong cá thể nên delta check (HEME-H01) giữ lại. Hệ thống chỉ nêu thay đổi, không kết luận nguyên nhân (thay đổi thật hay lỗi phân tích); người phụ trách đối chiếu lâm sàng/chạy lại.') });
+  mk(s, 'CBC', T('08:40'), { MCV: 77.8, RDW: 16.1, MCH: 24.9, HGB: 117, RBC: 4.70, HCT: 0.366, MCHC: 320, PLT: 331 }, { truth: { sampleError: 'wbit', details: 'Kịch bản WBIT dựng sẵn' },
+    scenario: sc('KB3b', 'Nghi nhầm mẫu (WBIT) trên CBC', 'MANUAL_REVIEW', 'MCV 92,4 → 77,8 fL, RDW 12,6 → 16,1% sau 10 ngày, không ghi nhận truyền máu. MCV/RDW/MCH là các chỉ số ổn định trong cá thể → delta check (HEME-H01) và mô hình nhầm mẫu (HEME-M01) cùng giữ lại. Hệ thống chỉ nêu nghi ngờ; người phụ trách xác minh định danh / lấy mẫu lại.') });
   // 6. QC lock
   s = S(6, 'M', 44);
   mk(s, 'CHEM_BASIC', T('10:05'), { K: 4.6 }, { measuredAtIso: T('10:45'), truth: { sampleError: 'qc_window', details: 'Đo K trong khoảng QC không đạt' },
@@ -563,7 +592,7 @@ function scenarioReports() {
 
 // ---------- run ----------
 buildQc();
-const { subjects, reports } = simulate();
+const { subjects, reports, nW } = simulate();
 const scen = scenarioReports();
 if (new Set(subjects.map(x => x.token)).size !== subjects.length) throw new Error('Duplicate subject tokens');
 const all = [...reports, ...scen].map(r => { delete r._t; return r; });
@@ -590,5 +619,5 @@ const bySplit = ['train', 'val', 'test', 'scenario'].map(sp => `${sp}=${count(r 
 const errTypes = {};
 for (const r of all) if (r.truth.sampleError) errTypes[r.truth.sampleError] = (errTypes[r.truth.sampleError] ?? 0) + 1;
 console.log(`Subjects: ${N_SUBJECTS} | Reports: ${all.length} (${bySplit}) | Results: ${lines.length - 1} | QC records: ${qcLog.length}`);
-console.log('Sample errors (primary label):', errTypes);
+console.log(`WBIT injected: ${nW} | sample errors (primary label):`, errTypes);
 console.log(`Today (${TODAY}) reports: ${count(r => r.specimen.collectedAt.startsWith(TODAY))}`);

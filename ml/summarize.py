@@ -44,7 +44,18 @@ for key, d in b["supervised"].items():
             if "byHistoryGroup" in r and cfg == "best_per_algorithm":
                 print("      " + " | ".join(f"{g}: det {pc(x['detected'])}" for g, x in r["byHistoryGroup"].items()))
 
-print("\nChosen by train CV AP:", b["chosenAlgorithmByTrainCvAp"])
+print("\n== Selection (validation; default = PR #2 choice where it exists) ==")
+for k, v in b["selection"].items():
+    ev = v["validation"][v["chosen"]]
+    print(f"  {k:16s} chosen {v['chosen']:12s} valPR {f3(ev['prAuc'])} {ev['prAuc_ci95']} | {v['reason']}")
+    for a, e in v["validation"].items():
+        print(f"      {a:12s} valPR {f3(e['prAuc'])} ci {[f3(x) for x in e['prAuc_ci95']]} added {pc(e['added'])} FA {pc(e['falseAlarm'])}")
+c = b["contaminationSplitVsCombined"]
+print("\n== Contamination: split vs combined ==", c["chosen"], "|", c["reason"])
+for n in ("combined_PR2", "split_rule_EDTA_plus_ivfluid"):
+    t = c[n]["test"]
+    print(f"  {n:30s} {c[n]['model']:28s} test added {pc(t['addedCatchOfRuleMissed'])} FA {pc(t['extraFalseAlarmOnCleanRuleAuto'])} rule {pc(t['ruleCaught'])}")
+print("Deployed:", b["deployed"])
 print("\n== Ablation without acute_setting (test PR-AUC) ==")
 for k, v in b["ablationWithoutAcuteSetting_testPrAuc"].items():
     print(" ", k, {c: {a: f3(x) for a, x in al.items()} for c, al in v.items()})
