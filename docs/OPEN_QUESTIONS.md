@@ -26,5 +26,9 @@ Ghi chú: phần **yêu cầu của chủ dự án** lấy từ `PROJECT CONTEXT
 
 - Không có xác thực người dùng. Vai trò "Người phụ trách (demo)" là cố định.
 - Trạng thái lưu trong một file JSON cục bộ, không có cơ chế đồng thời nhiều người dùng.
-- Mô hình là logistic regression để giải thích được. Chưa so sánh với XGBoost/LightGBM (không có thư viện trong môi trường), chưa hiệu chỉnh xác suất, chưa có conformal prediction.
+- Có ba detector XGBoost thử nghiệm: CBC WBIT (Graham et al., 2025), hóa sinh WBIT (Tortosa-Carreres et al., 2026), và nhiễm EDTA/dịch truyền trong hóa sinh (Farrell et al., 2026; Spies et al., 2025). Logistic regression cũ vẫn được giữ làm baseline. Tất cả được huấn luyện và đánh giá trên dữ liệu tổng hợp; đây chưa phải tái tạo paper hay thẩm định ngoài.
+- Ngưỡng XGBoost chọn theo recall mục tiêu trên validation; điểm đầu ra chưa được hiệu chỉnh xác suất. Ba paper mapping và phạm vi được ghi trong README và report. Detector nhiễm hóa sinh gộp các kiểu nhiễm trong dữ liệu mô phỏng; Farrell và Spies nghiên cứu bài toán/kiểu nhiễm liên quan nhưng không cùng một mô hình gộp này.
+- Tab Đánh giá mô hình đọc `reports/evaluation-comparison.json`, so sánh cùng tập test giữa chỉ rule, rule + logistic và rule + XGBoost. `reports/xgb_comparison.json` báo cáo theo detector. Chưa có giải thích feature đóng góp theo từng phiếu cho XGBoost.
+- Chưa có test hồi quy riêng cho scorer XGBoost JSON-tree hoặc đối chiếu số điểm với thư viện XGBoost.
+- Khi thiếu bất kỳ file XGBoost nào, server sẽ gọi trainer Python lúc khởi động; máy mới cần tạo `.venv` và cài `requirements-ml.txt` trước.
 - Chưa có PBRTQC (theo dõi trôi máy bằng dòng kết quả bệnh nhân), chưa có vi sinh, nước tiểu hay kết quả định tính.

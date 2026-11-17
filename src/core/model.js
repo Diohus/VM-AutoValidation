@@ -14,6 +14,7 @@ export function vectorize(featureObj, model) {
 }
 
 export function scoreFeatures(featureObj, model) {
+  if (model.algorithm === 'XGBoost JSON trees') return scoreXgboostFeatures(featureObj, model);
   const x = vectorize(featureObj, model);
   let s = model.bias;
   const contributions = [];
@@ -23,6 +24,24 @@ export function scoreFeatures(featureObj, model) {
     contributions.push({ feature: model.features[i], contribution: c, value: featureObj[model.features[i]] ?? null });
   }
   return { score: sigmoid(s), contributions };
+}
+
+function scoreXgboostFeatures(featureObj, model) {
+  let margin = model.baseMargin;
+  for (const tree of model.trees) {
+    let node = tree;
+    while (node.leaf == null) {
+      const value = featureObj[node.split];
+      const child = value == null || !Number.isFinite(value)
+        ? node.missing
+        : value < node.condition ? node.yes : node.no;
+      node = node.children.find(c => c.nodeid === child);
+    }
+    margin += node.leaf;
+  }
+  const score = sigmoid(margin);
+  // Global tree gain is not a per-report explanation; don't present it as one.
+  return { score, contributions: [] };
 }
 
 export function scoreReport(report, history, catalog, model) {

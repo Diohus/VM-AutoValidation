@@ -187,7 +187,7 @@
       "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
       "reason": "MCV/RDW/MCH… lệch khỏi lịch sử vượt biến thiên trong cá thể. Chỉ có quyền chuyển MANUAL_REVIEW.",
       "params": {
-        "model": "heme_wbit"
+        "model": "heme_wbit_xgb"
       }
     }
   ]

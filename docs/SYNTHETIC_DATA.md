@@ -56,6 +56,14 @@ Tập train/val/test được chia **theo người bệnh trước khi tiêm l�
 
 Mục đích là minh họa rằng "người phụ trách đã duyệt" không đồng nghĩa "kết quả đúng". Mô hình được huấn luyện trên nhãn thật của bản mô phỏng, không dùng nhãn người duyệt.
 
+## Detector XGBoost thử nghiệm
+
+`scripts/train-xgb.mjs` dùng feature từ `src/core/features.js` để huấn luyện ba detector: CBC WBIT, hóa sinh WBIT, và nhiễm EDTA/saline/D5W trong hóa sinh. Chia train/validation/test theo người bệnh; scenario bị loại. Hai detector WBIT chỉ nhận ca có lịch sử trong 90 ngày, trong khi detector nhiễm hóa sinh dùng feature mẫu hiện tại.
+
+`scripts/train-xgb.py` huấn luyện binary XGBoost (hist, depth 3, 200 cây, eta 0,05, scale positive weight); cây xử lý giá trị thiếu bằng nhánh missing. Ngưỡng chọn trên validation theo recall mục tiêu: 80% cho WBIT và 90% cho nhiễm. Kết quả detector ở `reports/xgb_comparison.json`; so sánh ba cấu hình toàn luồng ở `reports/evaluation-comparison.json`.
+
+Các lựa chọn nghiên cứu là: CBC WBIT — Graham et al. (2025), [doi:10.1093/clinchem/hvae210](https://doi.org/10.1093/clinchem/hvae210); hóa sinh WBIT — Tortosa-Carreres et al. (2026), [doi:10.1515/cclm-2025-0564](https://doi.org/10.1515/cclm-2025-0564); nhiễm hóa sinh — Farrell et al. (2026), [doi:10.1177/00045632261488751](https://doi.org/10.1177/00045632261488751), và Spies et al. (2025), [doi:10.1093/clinchem/hvae168](https://doi.org/10.1093/clinchem/hvae168). Đây là chuyển phương pháp để thử tính áp dụng, không tái tạo paper: dữ liệu, nhãn, cách chọn feature và cách huấn luyện thuộc prototype, chỉ mang tính tổng hợp.
+
 ## Giới hạn
 
 - Tham số không lấy từ dữ liệu Vinmec. Phân bố, tỷ lệ bệnh và tỷ lệ lỗi đều là giả định.

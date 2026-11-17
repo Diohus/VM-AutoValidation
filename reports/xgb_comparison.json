@@ -1,0 +1,96 @@
+{
+ "generatedAt": "2026-11-17T05:05:17.305Z",
+ "disclaimer": "Synthetic benchmark only; no clinical validation.",
+ "tasks": {
+  "heme_wbit_xgb": {
+   "name": "WBIT — CBC",
+   "discipline": "HEME",
+   "paper": "Graham et al. 2025, Clinical Chemistry, doi:10.1093/clinchem/hvae210",
+   "scope": "Same synthetic test reports and 80% (or 90% for contamination) validation recall target for thresholds.",
+   "logisticRegression": {
+    "threshold": 0.39124381896451776,
+    "tp": 26,
+    "fp": 48,
+    "fn": 6,
+    "tn": 934,
+    "sensitivity": 0.8125,
+    "specificity": 0.9511201629327902
+   },
+   "xgboost": {
+    "threshold": 0.4977347254753113,
+    "tp": 29,
+    "fp": 32,
+    "fn": 3,
+    "tn": 950,
+    "sensitivity": 0.90625,
+    "specificity": 0.9674134419551935
+   },
+   "train": {
+    "train": 2936,
+    "positives": 83,
+    "validation": 1012,
+    "test": 1014
+   }
+  },
+  "chem_wbit_xgb": {
+   "name": "WBIT — hóa sinh",
+   "discipline": "CHEM",
+   "paper": "Tortosa-Carreres et al. 2026, CCLM, doi:10.1515/cclm-2025-0564",
+   "scope": "Same synthetic test reports and 80% (or 90% for contamination) validation recall target for thresholds.",
+   "logisticRegression": {
+    "threshold": 0.26721601048028154,
+    "tp": 29,
+    "fp": 94,
+    "fn": 6,
+    "tn": 1140,
+    "sensitivity": 0.8285714285714286,
+    "specificity": 0.9238249594813615
+   },
+   "xgboost": {
+    "threshold": 0.3860167860984802,
+    "tp": 29,
+    "fp": 81,
+    "fn": 6,
+    "tn": 1153,
+    "sensitivity": 0.8285714285714286,
+    "specificity": 0.9343598055105349
+   },
+   "train": {
+    "train": 3488,
+    "positives": 95,
+    "validation": 1215,
+    "test": 1269
+   }
+  },
+  "chem_contam_xgb": {
+   "name": "Nhiễm mẫu — EDTA / dịch truyền",
+   "discipline": "CHEM",
+   "paper": "Farrell et al. 2026, Ann Clin Biochem, doi:10.1177/00045632261488751; Spies et al. 2025, Clinical Chemistry, doi:10.1093/clinchem/hvae168",
+   "scope": "Same synthetic test reports and 80% (or 90% for contamination) validation recall target for thresholds.",
+   "logisticRegression": {
+    "threshold": 0.669596668870359,
+    "tp": 40,
+    "fp": 10,
+    "fn": 6,
+    "tn": 1983,
+    "sensitivity": 0.8695652173913043,
+    "specificity": 0.994982438534872
+   },
+   "xgboost": {
+    "threshold": 0.9639440178871155,
+    "tp": 43,
+    "fp": 0,
+    "fn": 3,
+    "tn": 1993,
+    "sensitivity": 0.9347826086956522,
+    "specificity": 1
+   },
+   "train": {
+    "train": 5886,
+    "positives": 140,
+    "validation": 2059,
+    "test": 2039
+   }
+  }
+ }
+}
