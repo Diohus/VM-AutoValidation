@@ -1,5 +1,7 @@
 // LabReview demo UI. All data synthetic. Every user/LIS string is escaped before rendering.
-// Layout: sidebar navigation; primary information first, details behind progressive disclosure.
+// Flow: instrument → LIS → system reads the report and highlights what looks wrong (suggestion only)
+//       → doctor reads, then Ký / Cần xem xét lại / Yêu cầu chạy lại mẫu
+//       → signed reports go to a background FIFO queue for the hospital signing system; the doctor moves on at once.
 import { describeRule, outcomeBadge, OUTCOME } from './rules-view.js';
 
 const $ = s => document.querySelector(s);
@@ -20,50 +22,56 @@ async function api(path, opts = {}) {
 const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body ?? {}) });
 
 let toastTimer;
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 4500); }
+function toast(msg, kind = '') { const t = $('#toast'); t.textContent = msg; t.className = 'toast ' + kind; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 4500); }
 
+// System output is a SUGGESTION, worded for the doctor.
 const DECISION = {
-  AUTO_APPROVE_ELIGIBLE: { label: 'Đủ điều kiện tự duyệt', short: 'Tự duyệt', cls: 'auto', icon: '✓' },
-  MANUAL_REVIEW: { label: 'Cần người xem xét', short: 'Cần xem', cls: 'review', icon: '!' },
-  BLOCKED: { label: 'Bị chặn', short: 'Bị chặn', cls: 'blocked', icon: '■' }
+  AUTO_APPROVE_ELIGIBLE: { label: 'Không thấy bất thường', short: 'Bình thường', cls: 'auto', icon: '✓' },
+  MANUAL_REVIEW: { label: 'Có điểm cần chú ý', short: 'Cần chú ý', cls: 'review', icon: '!' },
+  BLOCKED: { label: 'Chưa nên ký', short: 'Chưa nên ký', cls: 'blocked', icon: '■' }
 };
 const badge = (d, short = false) => { const x = DECISION[d]; return `<span class="badge ${x.cls}"><span aria-hidden="true">${x.icon}</span>${short ? x.short : x.label}</span>`; };
+const WORK = {
+  PENDING: ['neutral', 'Chờ duyệt'], SIGN_FAILED: ['blocked', 'Ký lỗi'], IN_QUEUE: ['info', 'Đang chờ ký'], SIGNED: ['auto', 'Đã ký'],
+  FLAGGED: ['review', 'Cần xem xét lại'], RERUN_REQUESTED: ['info', 'Chờ chạy lại']
+};
+const TABS = [
+  ['todo', 'Chờ duyệt', w => w.workState === 'PENDING' || w.workState === 'SIGN_FAILED'],
+  ['flagged', 'Xem lại', w => w.workState === 'FLAGGED'],
+  ['rerun', 'Chạy lại', w => w.workState === 'RERUN_REQUESTED'],
+  ['queue', 'Đang ký', w => w.workState === 'IN_QUEUE'],
+  ['signed', 'Đã ký', w => w.workState === 'SIGNED']
+];
 const STATUS_TXT = { PASS: ['✓', 'Đạt'], FAIL: ['✕', 'Không đạt'], NOT_EVALUABLE: ['?', 'Thiếu dữ liệu'], NOT_APPLICABLE: ['–', 'Không áp dụng'] };
-const STAGE_TXT = { DATA: 'Dữ liệu bắt buộc', QC: 'QC', INSTRUMENT: 'Cờ máy', SPECIMEN: 'Mẫu', LIMIT: 'Giới hạn & tới hạn', CRITICAL: 'Giới hạn & tới hạn', HISTORY: 'Lịch sử (delta)', CONSISTENCY: 'Nhất quán giữa chỉ số', MODEL: 'Mô hình phát hiện lỗi (chỉ giữ thêm)' };
+const STAGE_TXT = { DATA: 'Dữ liệu bắt buộc', QC: 'QC', INSTRUMENT: 'Cờ máy', SPECIMEN: 'Mẫu', LIMIT: 'Giới hạn & tới hạn', CRITICAL: 'Giới hạn & tới hạn', HISTORY: 'Lịch sử (delta)', CONSISTENCY: 'Nhất quán giữa chỉ số', MODEL: 'Mô hình phát hiện lỗi' };
 const WARD = { OPD: 'Ngoại trú', IPD: 'Nội trú', ER: 'Cấp cứu' };
 const RESULT_STATUS = { RESULTED: 'Có kết quả', PENDING: 'Chưa có kết quả', FAILED: 'Máy báo lỗi', TRANSMISSION_ERROR: 'Lỗi truyền dữ liệu', NOT_COLLECTED: 'Không thu được mẫu', NOT_APPLICABLE: 'Không áp dụng' };
 const REASON_TXT = {
-  CONSISTENT_WITH_HISTORY: 'Phù hợp lịch sử', CONSISTENT_WITH_CONTEXT: 'Phù hợp bối cảnh lâm sàng đã xác minh', RERUN_CONFIRMED: 'Chạy lại xác nhận', CRITICAL_NOTIFIED: 'Tới hạn đã thông báo', OTHER: 'Khác (ghi rõ)',
-  SUSPECT_SPECIMEN: 'Nghi vấn mẫu', SUSPECT_WBIT: 'Nghi nhầm mẫu', SUSPECT_INSTRUMENT: 'Nghi vấn máy/phân tích', NEED_CONTEXT: 'Cần thêm bối cảnh',
-  RERUN: 'Chạy lại mẫu', RECOLLECT: 'Lấy mẫu lại', CHECK_TUBE_LABEL: 'Kiểm tra ống/nhãn', SMEAR_REVIEW: 'Xem lam máu', CONTACT_WARD: 'Liên hệ khoa lâm sàng', CHECK_INTERFACE_CONFIG: 'Kiểm tra cấu hình giao tiếp',
-  PHONE_WARD: 'Đã gọi báo khoa lâm sàng', ALL_CONDITIONS_MET: 'Đạt mọi điều kiện'
+  SUSPECT_SPECIMEN: 'Nghi vấn mẫu', SUSPECT_WBIT: 'Nghi nhầm mẫu', SUSPECT_INSTRUMENT: 'Nghi vấn máy', NEED_CONTEXT: 'Cần thêm thông tin lâm sàng', ASK_COLLEAGUE: 'Hỏi ý kiến đồng nghiệp',
+  RERUN: 'Chạy lại cùng mẫu', RECOLLECT: 'Lấy mẫu mới', DILUTE: 'Pha loãng rồi chạy lại', SMEAR_REVIEW: 'Xem lam máu', CHECK_TUBE_LABEL: 'Kiểm tra ống/nhãn', OTHER: 'Khác'
 };
-const ACTION_LABEL = { APPROVE: 'Duyệt & ký', HOLD: 'Giữ lại', REQUEST_CHECK: 'Yêu cầu kiểm tra', NOTIFY_CRITICAL: 'Đã báo tới hạn', AUTO_APPROVE: 'Hệ thống tự duyệt' };
-const VERIFY_TXT = { NOT_VERIFIED: 'Chưa xác minh', RERUN_SAME: 'Chạy lại: kết quả tương tự', RERUN_DIFFERENT: 'Chạy lại: kết quả khác biệt', RECOLLECT_DIFFERENT: 'Mẫu mới: kết quả khác biệt', RECOLLECT_SAME: 'Mẫu mới: kết quả tương tự', CLINICAL_CONFIRMED: 'Khoa lâm sàng xác nhận phù hợp' };
-const SEND_TXT = { SENDING: ['info', 'Đang gửi, chờ ACK'], ACKED: ['auto', 'Đã ký/gửi (có ACK)'], FAILED: ['blocked', 'Gửi thất bại'], SUPERSEDED: ['neutral', 'Đã có phiên bản mới'] };
+const ACTION_LABEL = { SIGN: 'Ký', FLAG_REVIEW: 'Cần xem xét lại', REQUEST_RERUN: 'Yêu cầu chạy lại mẫu' };
+const SEND_TXT = { QUEUED: ['info', 'Trong hàng đợi ký'], SIGNING: ['info', 'Đang gửi ký'], SIGNED: ['auto', 'Đã ký (hệ thống bệnh viện xác nhận)'], FAILED: ['blocked', 'Ký lỗi'], SUPERSEDED: ['neutral', 'Bỏ — đã có phiên bản mới'], CANCELLED: ['neutral', 'Bác sĩ rút lệnh ký'] };
 const ERR_TXT = { wbit: 'Nhầm mẫu (WBIT)', analytical_single: 'Lỗi phân tích đơn chỉ số', edta: 'Nhiễm EDTA', saline: 'Lẫn NaCl 0,9%', d5w: 'Lẫn glucose 5%', hemolysis: 'Tan máu', delayed: 'Chậm xử lý mẫu', qc_window: 'Đo khi QC không đạt', plt_clump: 'Tiểu cầu kết cụm', clot: 'Cục đông', short_sample: 'Thiếu thể tích mẫu' };
-const TITLES = { worklist: 'Hàng đợi duyệt', try: 'Nhập thử kết quả', eval: 'Đánh giá mô hình', feedback: 'Phản hồi chuyên môn', audit: 'Nhật ký', rules: 'Rule & cấu hình' };
+const TITLES = { worklist: 'Duyệt kết quả', try: 'Nhập thử kết quả', eval: 'Đánh giá mô hình', feedback: 'Phản hồi chuyên môn', audit: 'Nhật ký', rules: 'Rule & cấu hình' };
+const PRIORITY = { CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
 
-let meta, worklist = [], selected = null, current = null, decisionFilter = 'ACTION';
+let meta, worklist = [], queue = null, notes = [], selected = null, current = null, tab = 'todo';
+const seenNotes = new Set();
 
 // ---------------- boot & navigation ----------------
 async function boot() {
   meta = await api('/api/meta');
   $('#today').textContent = `Ngày ${fmtDate(meta.today + 'T12:00:00+07:00')} (mô phỏng)`;
-  $('#mode').value = meta.settings.mode; $('#modelEnabled').checked = meta.settings.modelEnabled; $('#showTruth').checked = meta.settings.showTruth;
+  $('#modelEnabled').checked = meta.settings.modelEnabled; $('#showTruth').checked = meta.settings.showTruth;
   $('#personalMode').value = meta.settings.personalMode ?? 'OFF';
-  $('#llmStatus').innerHTML = meta.llm?.configured ? `<span class="dot-on"></span>LLM: ${esc(meta.llm.model)} sẵn sàng` : `<span class="dot-off"></span>LLM chưa cấu hình (.env)`;
+  $('#llmStatus').innerHTML = meta.llm?.configured ? `<span class="dot-on"></span>LLM sẵn sàng` : `<span class="dot-off"></span>LLM chưa cấu hình (.env)`;
   $('#llmStatus').title = meta.llm?.reason ?? '';
-  for (const id of ['mode', 'personalMode', 'modelEnabled', 'showTruth']) $('#' + id).addEventListener('change', async e => {
-    const v = ['mode', 'personalMode'].includes(id) ? e.target.value : e.target.checked;
+  for (const id of ['personalMode', 'modelEnabled', 'showTruth']) $('#' + id).addEventListener('change', async e => {
+    const v = id === 'personalMode' ? e.target.value : e.target.checked;
     meta.settings = await post('/api/settings', { [id]: v });
-    toast(['mode', 'personalMode'].includes(id) ? `${id === 'mode' ? 'Chế độ' : 'Ngưỡng'}: ${e.target.selectedOptions[0].text}` : id === 'modelEnabled' ? (v ? 'Đã bật lớp mô hình' : 'Đã tắt lớp mô hình — chỉ chạy rule') : (v ? 'Đang hiện nhãn giả lập (chỉ dùng để đào tạo/thử)' : 'Đã ẩn nhãn giả lập'));
+    toast(id === 'personalMode' ? `Ngưỡng: ${e.target.selectedOptions[0].text}` : id === 'modelEnabled' ? (v ? 'Đã bật lớp mô hình' : 'Đã tắt lớp mô hình — chỉ chạy rule') : (v ? 'Đang hiện nhãn giả lập (chỉ dùng để đào tạo/thử)' : 'Đã ẩn nhãn giả lập'));
     await refresh();
-  });
-  $('#batch').addEventListener('click', async () => {
-    const r = await post('/api/batch');
-    toast(meta.settings.mode === 'SHADOW' ? `Chạy ngầm: ${r.autoEligible}/${r.evaluated} phiếu đủ điều kiện — chỉ ghi đề xuất, không ký.` : `Tự ký mô phỏng: đã gửi ${r.sent} phiếu, chờ ACK.`);
-    await refresh(); setTimeout(refresh, 2200);
   });
   document.querySelectorAll('.nav button').forEach(b => b.addEventListener('click', () => { showView(b.dataset.view); closeMenu(); }));
   const setCollapsed = on => {
@@ -75,16 +83,22 @@ async function boot() {
   };
   try { if (localStorage.getItem('labreview-sidebar') === 'collapsed') setCollapsed(true); } catch { /* ignore */ }
   $('#collapseBtn').addEventListener('click', () => setCollapsed(!document.body.classList.contains('side-collapsed')));
+  setupListResize();
   $('#menuBtn').addEventListener('click', () => { const open = !document.body.classList.contains('menu-open'); document.body.classList.toggle('menu-open', open); $('#menuBtn').setAttribute('aria-expanded', String(open)); });
   for (const id of ['fDisc', 'fScenario', 'fSearch']) $('#' + id).addEventListener('input', renderList);
-  $('#fScenario').checked = true; decisionFilter = 'all';
+  $('#queuePill').addEventListener('click', () => { showView('worklist'); tab = queue?.failed ? 'todo' : 'queue'; renderStats(); renderList(); });
+  $('#bellBtn').addEventListener('click', e => { e.stopPropagation(); toggleBell(); });
+  document.addEventListener('click', e => { if (!e.target.closest('.bell-wrap')) toggleBell(false); });
+  $('#fScenario').checked = true;
   await refresh();
+  for (const n of notes) seenNotes.add(n.id); // do not re-announce old notifications on load
   const h = location.hash.slice(1);
   const linked = location.hash.startsWith('#r=') ? decodeURIComponent(location.hash.slice(3)) : null;
-  if (linked && worklist.some(w => w.reportId === linked)) { $('#fScenario').checked = false; renderList(); }
-  const first = worklist.find(w => w.reportId === linked) ?? worklist.find(w => w.scenario?.code === 'KB1') ?? worklist[0];
-  if (first) await select(first.reportId);
+  if (linked && worklist.some(w => w.reportId === linked)) { $('#fScenario').checked = false; const w = worklist.find(x => x.reportId === linked); tab = TABS.find(([, , f]) => f(w))?.[0] ?? 'todo'; renderStats(); renderList(); }
+  const first = worklist.find(w => w.reportId === linked) ?? visibleItems()[0];
+  if (first) await select(first.reportId); else renderDetailEmpty();
   if (TITLES[h] && h !== 'worklist') showView(h);
+  setInterval(poll, 2500);
 }
 function closeMenu() { document.body.classList.remove('menu-open'); $('#menuBtn').setAttribute('aria-expanded', 'false'); }
 
@@ -93,91 +107,254 @@ function showView(v) {
   document.querySelectorAll('.nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === v)));
   document.querySelectorAll('.view').forEach(s => s.hidden = s.id !== 'view-' + v);
   $('#pageTitle').textContent = TITLES[v];
-  $('#batch').hidden = v !== 'worklist';
   ({ try: renderTry, eval: renderEval, feedback: renderFeedback, audit: renderAudit, rules: renderRules }[v])?.();
 }
 
 async function refresh() {
-  worklist = await api('/api/worklist');
-  renderStats(); renderList();
-  if (selected) await select(selected);
+  [worklist, queue, notes] = await Promise.all([api('/api/worklist'), api('/api/queue'), api('/api/notifications')]);
+  renderStats(); renderList(); renderQueuePill(); renderBell();
+  if (selected) await select(selected, { keepScroll: true });
+}
+
+// Background refresh: sign queue progress, failures and notifications arrive without the doctor reloading.
+let lastSig = '';
+async function poll() {
+  if (document.hidden) return;
+  try {
+    const [wl, q, ns] = await Promise.all([api('/api/worklist'), api('/api/queue'), api('/api/notifications')]);
+    const sig = JSON.stringify([wl.map(w => [w.workState, w.version, w.send?.status, w.send?.position]), q, ns.map(n => [n.id, n.read])]);
+    if (sig === lastSig) return;
+    lastSig = sig;
+    const prevSel = worklist.find(w => w.reportId === selected);
+    worklist = wl; queue = q; notes = ns;
+    renderStats(); renderList(); renderQueuePill(); renderBell();
+    announce(ns);
+    const nowSel = worklist.find(w => w.reportId === selected);
+    const busy = $('#subForm')?.childElementCount || document.activeElement?.closest?.('#detail form');
+    if (nowSel && prevSel && (nowSel.workState !== prevSel.workState || nowSel.version !== prevSel.version || nowSel.send?.position !== prevSel.send?.position) && !busy) await select(selected, { keepScroll: true });
+  } catch { /* offline for a moment: next tick retries */ }
+}
+
+// ---------------- notifications ----------------
+function announce(ns) {
+  for (const n of [...ns].reverse()) {
+    if (seenNotes.has(n.id)) continue;
+    seenNotes.add(n.id);
+    if (n.read) continue;
+    toast(n.text, 'error');
+    try { if ('Notification' in window && Notification.permission === 'granted') new Notification('LabReview — ký lỗi', { body: n.text, tag: 'labreview-' + n.id }); } catch { /* not supported */ }
+  }
+}
+function renderBell() {
+  const unread = notes.filter(n => !n.read).length;
+  $('#bellCount').hidden = !unread; $('#bellCount').textContent = unread;
+  $('#bellBtn').classList.toggle('has-unread', unread > 0);
+  if (!$('#bellPanel').hidden) drawBellPanel();
+}
+function drawBellPanel() {
+  $('#bellPanel').innerHTML = `<div class="bell-head"><strong>Thông báo</strong>${notes.some(n => !n.read) ? '<button type="button" class="link-btn" id="readAll">Đánh dấu đã đọc</button>' : ''}</div>
+    ${notes.length ? `<ul class="bell-list">${notes.slice(0, 20).map(n => `<li class="${n.read ? '' : 'unread'}"><button type="button" data-note="${n.id}" data-report="${esc(n.reportId)}"><span>${esc(n.text)}</span><small>${fmtTime(n.at)}</small></button></li>`).join('')}</ul>` : '<p class="empty small">Chưa có thông báo.</p>'}`;
+  $('#readAll')?.addEventListener('click', async () => { await post('/api/notifications/read', {}); notes.forEach(n => n.read = true); renderBell(); });
+  $('#bellPanel').querySelectorAll('[data-note]').forEach(b => b.addEventListener('click', async () => {
+    await post('/api/notifications/read', { ids: [Number(b.dataset.note)] });
+    toggleBell(false); showView('worklist'); tab = 'todo'; $('#fScenario').checked = false;
+    await refresh(); await select(b.dataset.report);
+  }));
+}
+function toggleBell(open) {
+  const p = $('#bellPanel');
+  const on = open ?? p.hidden;
+  p.hidden = !on; $('#bellBtn').setAttribute('aria-expanded', String(on));
+  if (on) drawBellPanel();
+}
+function askNotificationPermission() {
+  try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); } catch { /* ignore */ }
+}
+
+function renderQueuePill() {
+  const p = $('#queuePill');
+  if (!queue) return;
+  const n = (queue.signing ? 1 : 0) + queue.queued.length;
+  p.hidden = !n && !queue.failed;
+  p.className = 'queue-pill' + (queue.failed ? ' has-failed' : '') + (n ? ' busy' : '');
+  p.innerHTML = [n ? `<span class="spin" aria-hidden="true"></span>Đang ký ${n} phiếu` : '', queue.failed ? `<b>${queue.failed} ký lỗi</b>` : ''].filter(Boolean).join(' · ');
 }
 
 // ---------------- worklist ----------------
+// Kéo thanh giữa để đổi độ rộng cột danh sách; kéo hẳn sang trái (hoặc bấm nút) để thu gọn.
+function setupListResize() {
+  const split = $('.split'), handle = $('#splitHandle'), btn = $('#listToggle');
+  const MIN = 240, MAX = 640, KEY = 'labreview-listw';
+  const save = v => { try { localStorage.setItem(KEY, v); } catch { /* storage unavailable */ } };
+  const setW = w => { w = Math.round(Math.min(MAX, Math.max(MIN, w))); split.style.setProperty('--list-w', w + 'px'); handle.setAttribute('aria-valuenow', String(w)); return w; };
+  const setCollapsed = on => {
+    document.body.classList.toggle('list-collapsed', on);
+    btn.textContent = on ? '›' : '‹';
+    btn.title = btn.ariaLabel = on ? 'Mở danh sách phiếu' : 'Thu gọn danh sách phiếu';
+  };
+  try { const v = localStorage.getItem(KEY); if (v === 'collapsed') setCollapsed(true); else if (v) setW(Number(v)); } catch { /* ignore */ }
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const on = !document.body.classList.contains('list-collapsed'); setCollapsed(on);
+    save(on ? 'collapsed' : parseInt(getComputedStyle(split).getPropertyValue('--list-w')) || 360);
+  });
+  btn.addEventListener('pointerdown', e => e.stopPropagation());
+  handle.addEventListener('pointerdown', e => {
+    e.preventDefault(); handle.setPointerCapture(e.pointerId); document.body.classList.add('resizing');
+    const left = split.getBoundingClientRect().left;
+    const move = ev => {
+      const w = ev.clientX - left;
+      if (w < MIN - 80) setCollapsed(true); else { setCollapsed(false); setW(w); }
+    };
+    const up = () => {
+      handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', up); handle.removeEventListener('pointercancel', up);
+      document.body.classList.remove('resizing');
+      save(document.body.classList.contains('list-collapsed') ? 'collapsed' : parseInt(split.style.getPropertyValue('--list-w')) || 360);
+    };
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', up); handle.addEventListener('pointercancel', up);
+  });
+  handle.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault(); setCollapsed(false);
+    save(setW((parseInt(getComputedStyle(split).getPropertyValue('--list-w')) || 360) + (e.key === 'ArrowLeft' ? -24 : 24)));
+  });
+}
+
+function filtered() {
+  const fdisc = $('#fDisc').value, fs = $('#fScenario').checked, q = $('#fSearch').value.trim().toLowerCase();
+  return worklist.filter(w => (fdisc === 'all' || w.discipline === fdisc) && (!fs || w.scenario)
+    && (!q || [w.reportId, w.subjectToken, w.panelName, w.scenario?.title, w.scenario?.code].join(' ').toLowerCase().includes(q)));
+}
+function visibleItems() {
+  const f = TABS.find(t => t[0] === tab)[2];
+  return filtered().filter(f).sort((a, b) =>
+    (b.workState === 'SIGN_FAILED') - (a.workState === 'SIGN_FAILED')
+    || (tab === 'queue' ? (a.send?.position ?? 0) - (b.send?.position ?? 0) : 0)
+    || (tab === 'signed' ? String(b.send?.signedAt).localeCompare(String(a.send?.signedAt)) : 0)
+    || PRIORITY[a.priority] - PRIORITY[b.priority]
+    || (a.scenario?.code ?? 'ZZ').localeCompare(b.scenario?.code ?? 'ZZ', 'vi', { numeric: true })
+    || a.collectedAt.localeCompare(b.collectedAt));
+}
+
 function renderStats() {
-  const c = d => worklist.filter(w => w.decision === d).length;
-  const tiles = [
-    ['all', 'Tất cả phiếu', worklist.length, ''],
-    ['CRITICAL', 'Giá trị tới hạn', worklist.filter(w => w.criticalValue).length, 'crit'],
-    ['BLOCKED', 'Bị chặn', c('BLOCKED'), 'blocked'],
-    ['MANUAL_REVIEW', 'Cần người xem', c('MANUAL_REVIEW'), 'review'],
-    ['AUTO_APPROVE_ELIGIBLE', 'Đủ điều kiện tự duyệt', c('AUTO_APPROVE_ELIGIBLE'), 'auto']
-  ];
-  $('#navCount').textContent = worklist.filter(w => w.decision !== 'AUTO_APPROVE_ELIGIBLE' && !w.review).length || '';
-  $('#stats').innerHTML = tiles.map(([k, label, n, cls]) => `<button type="button" class="stat ${cls} ${decisionFilter === k ? 'active' : ''}" data-filter="${k}" aria-pressed="${decisionFilter === k}"><span>${label}</span><strong>${n}</strong></button>`).join('');
-  document.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => { decisionFilter = b.dataset.filter; renderStats(); renderList(); }));
+  const base = filtered();
+  const todo = worklist.filter(TABS[0][2]).length;
+  $('#navCount').textContent = todo || '';
+  $('#stats').innerHTML = TABS.map(([k, label, f]) => {
+    const n = base.filter(f).length, failed = k === 'todo' ? base.filter(w => w.workState === 'SIGN_FAILED').length : 0;
+    return `<button type="button" role="tab" class="tab ${tab === k ? 'active' : ''}" aria-selected="${tab === k}" data-tab="${k}">${label}<em>${n}</em>${failed ? `<i class="dot-fail" title="${failed} phiếu ký lỗi"></i>` : ''}</button>`;
+  }).join('');
+  document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { tab = b.dataset.tab; renderStats(); renderList(); }));
+}
+
+function itemChip(w) {
+  if (w.workState === 'SIGN_FAILED') return '<span class="badge blocked">Ký lỗi</span>';
+  if (w.workState === 'IN_QUEUE') return `<span class="badge info">${w.send?.status === 'SIGNING' ? 'Đang ký…' : `Chờ ký #${w.send?.position ?? ''}`}</span>`;
+  if (w.workState === 'SIGNED') return '<span class="badge auto">✓ Đã ký</span>';
+  if (w.workState === 'FLAGGED') return '<span class="badge review">Xem lại</span>';
+  if (w.workState === 'RERUN_REQUESTED') return '<span class="badge info">Chờ chạy lại</span>';
+  return w.criticalValue ? '<span class="badge crit">⚠ Tới hạn</span>' : badge(w.decision, true);
+}
+function itemLine(w) {
+  if (w.workState === 'SIGN_FAILED') return `<span class="item-note err">${esc(w.send?.error ?? 'Ký lỗi')}</span>`;
+  if (w.workState === 'RERUN_REQUESTED') return `<span class="item-note">Chạy lại: ${esc((w.review?.tests ?? []).join(', '))}</span>`;
+  if (w.workState === 'FLAGGED' && w.review?.note) return `<span class="item-note">${esc(w.review.note)}</span>`;
+  if (w.workState === 'PENDING' && w.flaggedTests.length) return `<span class="item-note ${DECISION[w.decision].cls}">Chú ý: ${esc(w.flaggedTests.slice(0, 5).join(', '))}${w.flaggedTests.length > 5 ? ` +${w.flaggedTests.length - 5}` : ''}</span>`;
+  if (w.workState === 'PENDING' && w.nIssues) return `<span class="item-note ${DECISION[w.decision].cls}">${w.nIssues} điểm cần chú ý</span>`;
+  return '';
 }
 
 function renderList() {
-  const fdisc = $('#fDisc').value, fs = $('#fScenario').checked, q = $('#fSearch').value.trim().toLowerCase();
-  const order = { CRITICAL: 0, HIGH: 1, NORMAL: 2, LOW: 3 };
-  const items = worklist.filter(w => (decisionFilter === 'all' || (decisionFilter === 'CRITICAL' ? w.criticalValue : w.decision === decisionFilter)) && (fdisc === 'all' || w.discipline === fdisc) && (!fs || w.scenario)
-    && (!q || [w.reportId, w.subjectToken, w.panelName, w.scenario?.title, w.scenario?.code].join(' ').toLowerCase().includes(q)))
-    .sort((a, b) => order[a.priority] - order[b.priority] || (a.scenario?.code ?? 'ZZ').localeCompare(b.scenario?.code ?? 'ZZ', 'vi', { numeric: true }) || a.collectedAt.localeCompare(b.collectedAt));
+  const items = visibleItems();
   $('#list').innerHTML = items.length ? items.map(w => `
-    <button class="item ${w.reportId === selected ? 'selected' : ''} pri-${w.criticalValue ? 'crit' : DECISION[w.decision].cls}" data-id="${esc(w.reportId)}" type="button">
-      <span class="item-top"><strong>${esc(w.scenario?.title ?? w.panelName)}</strong>${w.criticalValue ? '<span class="badge crit">⚠ Tới hạn</span>' : badge(w.decision, true)}</span>
-      <span class="item-sub">${esc(w.scenario?.code ? w.scenario.code + ' · ' : '')}${esc(w.reportId)} · ${w.discipline === 'CHEM' ? 'Hóa sinh' : 'Huyết học'} · ${fmtHour(w.collectedAt)}${w.version > 1 ? ` · v${w.version}` : ''}
-        ${w.send ? ` · <span class="status-txt ${SEND_TXT[w.send.status][0]}">${SEND_TXT[w.send.status][1]}</span>` : w.review ? ` · <span class="status-txt neutral">${esc(ACTION_LABEL[w.review.action])}</span>` : ''}</span>
-    </button>`).join('') : '<div class="empty">Không có phiếu phù hợp bộ lọc.</div>';
+    <button class="item ${w.reportId === selected ? 'selected' : ''} pri-${w.workState === 'SIGN_FAILED' ? 'blocked' : w.workState !== 'PENDING' ? 'none' : w.criticalValue ? 'crit' : DECISION[w.decision].cls}" data-id="${esc(w.reportId)}" type="button">
+      <span class="item-top"><strong>${esc(w.scenario?.title ?? w.panelName)}</strong>${itemChip(w)}</span>
+      <span class="item-sub">${esc(w.scenario?.code ? w.scenario.code + ' · ' : '')}${esc(w.subjectToken)} · ${w.discipline === 'CHEM' ? 'Hóa sinh' : 'Huyết học'} · ${fmtHour(w.collectedAt)}${w.version > 1 ? ` · v${w.version}` : ''}</span>
+      ${itemLine(w)}
+    </button>`).join('') : `<div class="empty">${tab === 'todo' ? 'Không còn phiếu chờ duyệt.' : 'Không có phiếu.'}</div>`;
   document.querySelectorAll('.item').forEach(b => b.addEventListener('click', () => select(b.dataset.id)));
 }
 
-async function select(id) {
+async function select(id, { keepScroll = false } = {}) {
   selected = id;
   if (history.replaceState && !$('#view-worklist').hidden) history.replaceState(null, '', '#r=' + encodeURIComponent(id));
   document.querySelectorAll('.item').forEach(b => b.classList.toggle('selected', b.dataset.id === id));
+  const y = scrollY;
   current = await api('/api/reports/' + encodeURIComponent(id));
   renderDetail();
+  if (keepScroll) scrollTo(0, y);
+}
+
+// After an action the doctor goes straight to the next report of the same list (no waiting for signing).
+async function advance(fromId) {
+  const before = visibleItems().map(w => w.reportId);
+  const i = before.indexOf(fromId);
+  await refresh();
+  const after = visibleItems();
+  const next = after.find(w => before.indexOf(w.reportId) > i && w.reportId !== fromId) ?? after.find(w => w.reportId !== fromId);
+  if (next) { await select(next.reportId); scrollTo({ top: 0, behavior: 'smooth' }); }
+  else { selected = null; renderList(); renderDetailEmpty(); }
+}
+function renderDetailEmpty() {
+  current = null;
+  $('#detail').innerHTML = `<div class="empty"><p><b>Đã duyệt hết phiếu trong danh sách này.</b></p><p class="small">Phiếu đã ký đang được gửi lần lượt sang hệ thống bệnh viện. Nếu có phiếu ký lỗi, phiếu sẽ quay lại đầu danh sách "Chờ duyệt" và có thông báo.</p></div>`;
 }
 
 // ---------------- report detail ----------------
-// Short, scannable reason: rule name + compact message (full text stays in "Các bước kiểm tra").
-function reasonList(ev) {
-  const failing = ev.checks.filter(c => c.action);
-  if (!failing.length) return '';
-  const order = { BLOCK: 0, CRITICAL: 1, REVIEW: 2 };
-  return `<ul class="reasons">${failing.sort((a, b) => order[a.action] - order[b.action]).map(c => `<li class="r-${c.action}"><span class="r-ic" aria-hidden="true">${OUTCOME[c.action].icon}</span>
-    <div><strong>${esc(c.name)}</strong><span>${esc(c.message.split('. Ngoài khoảng tham chiếu')[0])}</span></div></li>`).join('')}</ul>`;
+// Per-analyte notes: which check flagged this row, and why (only the part of the message about this analyte).
+function analyteNotes(ev) {
+  const out = {};
+  for (const c of ev.checks.filter(c => c.action)) for (const t of c.analytes) {
+    const segs = c.message.split('; ').filter(s => new RegExp(`^${t}[=: ]`).test(s));
+    const text = (segs.length ? segs.join('; ') : c.message).split('. Ngoài khoảng tham chiếu')[0].replace(new RegExp(`^${t}: `), '');
+    (out[t] ??= []).push({ action: c.action, name: c.name, text });
+  }
+  return out;
+}
+const RANK = { REVIEW: 1, CRITICAL: 2, BLOCK: 3 };
+const worst = list => list.reduce((a, n) => RANK[n.action] > RANK[a] ? n.action : a, 'REVIEW');
+
+function suggestionBox(ev, report, { llm = true } = {}) {
+  const issues = ev.checks.filter(c => c.action);
+  const general = issues.filter(c => !c.analytes.length).sort((a, b) => RANK[b.action] - RANK[a.action]);
+  const flagged = Object.entries(ev.analyteStatus).filter(([, v]) => v !== 'OK').map(([t]) => t);
+  const resulted = report.results.filter(x => x.status === 'RESULTED').length;
+  const cls = ev.criticalValue ? 'crit' : DECISION[ev.decision].cls;
+  const head = ev.criticalValue ? 'Có giá trị tới hạn' : DECISION[ev.decision].label;
+  const lead = !issues.length ? 'Không thấy điểm bất thường theo rule và mô hình. Bác sĩ vẫn là người xem và quyết định ký.'
+    : [flagged.length ? `${flagged.length} chỉ số được tô màu trong bảng, kèm lý do.` : '', general.length ? 'Vấn đề chung của phiếu:' : ''].filter(Boolean).join(' ');
+  return `<section class="suggest ${cls}" aria-label="Đề xuất của hệ thống">
+    <div class="suggest-head"><span class="suggest-ic" aria-hidden="true">${ev.criticalValue ? '⚠' : DECISION[ev.decision].icon}</span>
+      <div><span class="suggest-kicker">Hệ thống đề xuất · đã đọc ${resulted}/${report.orderedTests.length} kết quả</span><strong>${head}</strong></div></div>
+    <p class="suggest-lead">${lead}</p>
+    ${general.length ? `<ul class="suggest-list">${general.map(c => `<li class="a-${c.action}"><b>${esc(c.name)}</b> — ${esc(c.message)}</li>`).join('')}</ul>` : ''}
+    ${llm ? llmBlock() : ''}
+  </section>`;
 }
 
-function resultsTable(d, ev, { collapse = true } = {}) {
+function resultsTable(d, ev) {
   const r = d.report, info = d.analyteInfo, hist = d.history ?? {};
-  const okCount = r.orderedTests.filter(t => (ev.analyteStatus[t] ?? 'OK') === 'OK').length;
-  const folded = collapse && okCount > 0 && okCount < r.orderedTests.length;
-  const toggle = folded ? `<button type="button" class="link-btn" data-toggle-ok>Hiện ${okCount} kết quả bình thường khác</button>` : '';
-  return `<div class="tablewrap"><table class="results ${folded ? 'collapsed' : ''}"><thead><tr><th>Xét nghiệm</th><th class="num">Kết quả</th><th>Đơn vị</th><th>Tham chiếu</th>${ev.personal ? '<th>Khoảng cá nhân</th>' : ''}<th>Lần trước</th><th class="center">Trạng thái</th></tr></thead><tbody>
+  const notesBy = analyteNotes(ev);
+  const cols = 6 + (ev.personal ? 1 : 0);
+  return `<div class="tablewrap"><table class="lab"><thead><tr><th>Xét nghiệm</th><th class="num">Kết quả</th><th class="flag"></th><th>Đơn vị</th><th>Khoảng tham chiếu</th>${ev.personal ? '<th>Khoảng cá nhân</th>' : ''}<th>Lần trước</th></tr></thead><tbody>
   ${r.orderedTests.map(t => {
-    const x = r.results.find(q => q.test === t), i = info[t], st = ev.analyteStatus[t] ?? 'OK';
-    const out = x && typeof x.value === 'number' && x.unit === i.unit && (x.value < i.ref[0] || x.value > i.ref[1]);
+    const x = r.results.find(q => q.test === t), i = info[t];
+    const ok = x && x.status === 'RESULTED' && typeof x.value === 'number' && x.unit === i.unit;
+    const hi = ok && x.value > i.ref[1], lo = ok && x.value < i.ref[0];
     const prev = (hist[t] ?? []).at?.(-1);
-    const stIc = { OK: '<span class="dot ok" title="Đạt" aria-label="Đạt">✓</span>', REVIEW: '<span class="dot review" title="Cần xem" aria-label="Cần xem">!</span>', CRITICAL: '<span class="dot crit" title="Tới hạn" aria-label="Tới hạn">⚠</span>', BLOCKED: '<span class="dot blocked" title="Bị chặn" aria-label="Bị chặn">■</span>' }[st];
-    const valTxt = !x ? '<span class="muted">Không có</span>' : x.status !== 'RESULTED' ? `<span class="status-txt blocked">${esc(RESULT_STATUS[x.status] ?? x.status)}</span>` : `<span class="${out ? 'val-out' : ''}">${val(x.value)}${out ? (x.value > i.ref[1] ? ' ↑' : ' ↓') : ''}</span>`;
+    const ns = notesBy[t] ?? [];
+    const hl = ns.length ? `hl hl-${worst(ns)}` : '';
+    const valTxt = !x ? '<span class="muted">Không có</span>' : x.status !== 'RESULTED' ? `<span class="status-txt blocked">${esc(RESULT_STATUS[x.status] ?? x.status)}</span>` : `<span class="${hi || lo ? 'v-out' : ''}">${val(x.value)}</span>`;
     const unitTxt = !x ? '' : !x.unit ? '<span class="status-txt blocked">thiếu</span>' : x.unit !== i.unit ? `<span class="status-txt blocked">${esc(x.unit)}</span>` : esc(x.unit);
-    return `<tr class="st-${st} ${st === 'OK' ? 'okrow' : ''}"><td>${esc(i.name)}</td><td class="num">${valTxt}</td><td class="muted">${unitTxt}</td><td class="muted">${val(i.ref[0])} – ${val(i.ref[1])}</td>
+    const row = `<tr class="${hl}"><td><span class="t-name">${esc(i.name)}</span> <span class="t-code">${esc(t)}</span></td><td class="num">${valTxt}</td>
+      <td class="flag">${hi ? '<span class="hf h" title="Cao hơn khoảng tham chiếu">H</span>' : lo ? '<span class="hf l" title="Thấp hơn khoảng tham chiếu">L</span>' : ''}</td>
+      <td class="muted">${unitTxt}</td><td class="muted">${val(i.ref[0])} – ${val(i.ref[1])}</td>
       ${ev.personal ? `<td>${personalCell(ev.personal[t], i)}</td>` : ''}
-      <td class="muted">${prev ? `${val(prev.value)} <small>(${fmtDate(prev.measuredAt)})</small>` : '—'}</td><td class="center">${stIc}</td></tr>`;
-  }).join('')}</tbody></table></div>${toggle}`;
+      <td class="muted">${prev ? `${val(prev.value)} <small>${fmtDate(prev.measuredAt)}</small>` : '—'}</td></tr>`;
+    const note = ns.length ? `<tr class="note-row hl-${worst(ns)}"><td colspan="${cols}">${ns.map(n => `<div class="anote a-${n.action}"><span class="anote-ic" aria-hidden="true">${n.action === 'CRITICAL' ? '⚠' : n.action === 'BLOCK' ? '■' : '!'}</span><span><b>${esc(n.name)}:</b> ${esc(n.text)}</span></div>`).join('')}</td></tr>` : '';
+    return row + note;
+  }).join('')}</tbody></table></div>`;
 }
-// Delegated toggle for "show normal results".
-document.addEventListener('click', e => {
-  const b = e.target.closest('[data-toggle-ok]');
-  if (!b) return;
-  const t = b.previousElementSibling?.querySelector('table');
-  if (!t) return;
-  b.dataset.label ??= b.textContent;
-  b.textContent = t.classList.toggle('collapsed') ? b.dataset.label : 'Ẩn kết quả bình thường';
-});
 
 function personalCell(pi, info) {
   if (!pi) return '<span class="muted">—</span>';
@@ -199,7 +376,7 @@ function allChecks(ev) {
 }
 
 function modelsBlock(ev) {
-  if (!ev.modelEnabled) return '<p class="muted">Lớp mô hình đang tắt — quyết định chỉ dựa trên rule.</p>';
+  if (!ev.modelEnabled) return '<p class="muted">Lớp mô hình đang tắt — đề xuất chỉ dựa trên rule.</p>';
   if (!ev.models?.length) return '<p class="muted">Không có mô hình cho nhóm này (hoặc chưa có models/*.json — đang chỉ chạy rule).</p>';
   const covTxt = c => `Dữ liệu: dùng <b>${c.used}/${c.total}</b> chỉ số${c.missing.length ? ` <span class="muted">(thiếu: ${c.missing.map(m => `${esc(m.test)} — ${m.reason === 'NOT_ORDERED' ? 'không chỉ định' : 'chưa có kết quả'}`).join(', ')})</span>` : ''}`;
   return ev.models.map(m => {
@@ -210,8 +387,8 @@ function modelsBlock(ev) {
     const why = m.top.length ? `<br><span class="muted">Yếu tố ảnh hưởng nhiều nhất: ${m.top.map(t => `${t.direction === 'DOWN' ? '↓' : '↑'} ${esc(t.label)}${t.value != null ? ` (${num(t.value, 2)})` : ''}`).join('; ')}</span><br><span class="muted small">↑ làm tăng điểm nghi ngờ, ↓ làm giảm.</span>` : '<br><span class="muted small">Không có yếu tố nào làm đổi điểm so với mức nền.</span>';
     return `<div class="model-row">${head}<div class="meter-wrap">
       <div class="meter" role="img" aria-label="Điểm ${num(m.score)}, ngưỡng ${num(m.threshold)}"><span class="fill ${m.flagged ? 'hot' : ''}" style="width:${Math.min(100, m.score / scale * 100)}%"></span><span class="thr" style="left:${Math.min(100, m.threshold / scale * 100)}%"></span></div>
-      <div class="small">Điểm <b>${num(m.score)}</b> / ngưỡng ${num(m.threshold)} — ${m.flagged ? '<b>giữ thêm để xem</b>' : 'không gắn cờ'}${why}</div>${meta}</div></div>`;
-  }).join('') + '<p class="muted small">Điểm phát hiện trên dữ liệu giả lập, không phải xác suất an toàn. Mô hình chỉ có thể giữ thêm phiếu, không chặn và không tự duyệt. Thiếu dữ liệu then chốt → "không đánh giá được", không bao giờ là "đạt".</p>';
+      <div class="small">Điểm <b>${num(m.score)}</b> / ngưỡng ${num(m.threshold)} — ${m.flagged ? '<b>gắn cờ để bác sĩ chú ý</b>' : 'không gắn cờ'}${why}</div>${meta}</div></div>`;
+  }).join('') + '<p class="muted small">Điểm phát hiện trên dữ liệu giả lập, không phải xác suất an toàn. Mô hình chỉ gắn cờ để bác sĩ chú ý. Thiếu dữ liệu then chốt → "không đánh giá được", không bao giờ là "đạt".</p>';
 }
 
 function contextBlock(r) {
@@ -220,21 +397,18 @@ function contextBlock(r) {
   const yn = { YES: 'Có', NO: 'Không', UNKNOWN: 'Không rõ' };
   return `<div class="kv-grid">
     <div><h4>Người bệnh (không định danh)</h4><dl class="kv"><dt>Mã giả</dt><dd class="mono">${esc(r.subjectToken)}</dd><dt>Nhóm tuổi</dt><dd>${esc(c.ageGroup || c.age)}</dd><dt>Giới</dt><dd>${c.sex === 'F' ? 'Nữ' : 'Nam'}</dd><dt>Nhịn ăn</dt><dd>${yn[c.fasting]}</dd><dt>Truyền dịch</dt><dd>${yn[c.ivInfusion]}</dd></dl>
-      <h4>Bệnh nền · thuốc · sự kiện</h4><ul class="plain">${li([...c.conditions.map(x => ({ t: x.label, d: x.knownAt })), ...c.medications.map(x => ({ t: x.label, d: x.startedAt })), ...c.events.map(x => ({ t: x.label, d: x.at }))], x => `<li>${esc(x.t)} <span class="muted">· ${fmtDate(x.d)}</span></li>`)}</ul>
-      <p class="muted small">Bối cảnh chỉ hỗ trợ người duyệt; hệ thống không dùng riêng chẩn đoán để quyết định ký.</p></div>
+      <h4>Bệnh nền · thuốc · sự kiện</h4><ul class="plain">${li([...c.conditions.map(x => ({ t: x.label, d: x.knownAt })), ...c.medications.map(x => ({ t: x.label, d: x.startedAt })), ...c.events.map(x => ({ t: x.label, d: x.at }))], x => `<li>${esc(x.t)} <span class="muted">· ${fmtDate(x.d)}</span></li>`)}</ul></div>
     <div><h4>Mẫu & thiết bị</h4><dl class="kv"><dt>Mã mẫu</dt><dd class="mono">${esc(r.specimen.specimenId)}</dd><dt>Lấy / nhận</dt><dd>${fmtHour(r.specimen.collectedAt)} / ${fmtHour(r.specimen.receivedAt)}</dd><dt>Đo</dt><dd>${fmtHour(r.results.find(x => x.measuredAt)?.measuredAt)}</dd>
       ${r.discipline === 'CHEM' ? `<dt>HIL</dt><dd>${r.specimen.hil ? `H ${esc(r.specimen.hil.H)} · L ${esc(r.specimen.hil.L)} · I ${esc(r.specimen.hil.I)}` : '<span class="status-txt blocked">Thiếu</span>'}</dd>` : ''}
       <dt>Cờ máy</dt><dd>${r.instrumentFlags.length ? r.instrumentFlags.map(f => `<span class="tag review">${esc(f.code)}</span>`).join(' ') : 'Không có'}</dd>
       <dt>Máy</dt><dd>${[...new Set(r.results.map(x => x.instrument))].map(esc).join(', ')}</dd></dl>
-      ${current.qcRelevant.length ? `<p class="small">QC hôm nay: ${current.qcRelevant.map(q => `${esc(q.test)} ${fmtHour(q.at)} ${q.status === 'PASS' ? 'đạt' : '<b>không đạt</b>'}`).join(' · ')}</p>` : ''}</div></div>`;
+      ${current?.qcRelevant?.length ? `<p class="small">QC hôm nay: ${current.qcRelevant.map(q => `${esc(q.test)} ${fmtHour(q.at)} ${q.status === 'PASS' ? 'đạt' : '<b>không đạt</b>'}`).join(' · ')}</p>` : ''}</div></div>`;
 }
 
-function sendBlock(d) {
-  const s = d.send.current;
-  const sup = d.send.superseded.length ? `<p class="muted small">Phiên bản cũ: ${d.send.superseded.map(x => `${esc(x.key)} — ${esc(SEND_TXT[x.status]?.[1] ?? x.status)}`).join('; ')}. ACK của phiên bản cũ không xác nhận phiên bản hiện tại.</p>` : '';
-  if (!s) return `<p class="muted">Chưa gửi. "Đã ký/đã gửi" chỉ hiện khi hệ thống tiếp nhận (mô phỏng) trả ACK.</p>${sup}`;
-  return `<p><span class="badge ${SEND_TXT[s.status][0]}">${SEND_TXT[s.status][1]}</span> <span class="muted small mono">${esc(s.idempotencyKey)} · lần ${s.attempts}${s.ackId ? ' · ' + esc(s.ackId) : ''}</span></p>
-    ${s.status === 'FAILED' ? `<p class="small">${esc(s.error)}</p><button class="btn" type="button" id="retrySend">Gửi lại</button>` : ''}${sup}`;
+function sendHistory(d) {
+  const rows = [...(d.send.current ? [{ key: d.send.current.idempotencyKey, ...d.send.current }] : []), ...d.send.superseded];
+  if (!rows.length) return '<p class="muted">Chưa gửi ký. "Đã ký" chỉ hiện khi hệ thống bệnh viện (mô phỏng) xác nhận.</p>';
+  return `<ul class="plain small">${rows.map(s => `<li><span class="status-txt ${SEND_TXT[s.status]?.[0] ?? ''}">${esc(SEND_TXT[s.status]?.[1] ?? s.status)}</span> <span class="muted mono">${esc(s.key)} · lần ${s.attempts}${s.signId ? ' · ' + esc(s.signId) : ''}</span>${s.error ? `<br><span class="muted">${esc(s.error)}</span>` : ''}</li>`).join('')}</ul>`;
 }
 
 function timeline(list) {
@@ -242,73 +416,89 @@ function timeline(list) {
   return `<ul class="timeline">${[...list].reverse().map(a => `<li><span class="t">${fmtHour(a.at)}</span><span><b>${esc(a.type)}</b>${a.version ? ' · v' + esc(a.version) : ''} — ${esc(a.actor)}<br><span class="muted">${esc(a.note ?? '')}</span></span></li>`).join('')}</ul>`;
 }
 
-function actionPanel(d, ev) {
-  const crit = ev.criticalValue, notified = d.review?.criticalNotified;
-  const acts = [...(crit ? ['NOTIFY_CRITICAL'] : []), 'APPROVE', 'HOLD', 'REQUEST_CHECK'];
-  const disabled = a => a === 'APPROVE' && (ev.decision === 'BLOCKED' || (crit && !notified));
-  const def = crit && !notified ? 'NOTIFY_CRITICAL' : ev.decision === 'BLOCKED' ? 'REQUEST_CHECK' : ev.decision === 'AUTO_APPROVE_ELIGIBLE' ? 'APPROVE' : 'HOLD';
-  const hint = ev.decision === 'BLOCKED' ? 'Phiếu bị chặn: xử lý bằng "Cập nhật kết quả" (chạy lại, sửa đơn vị, lấy mẫu mới) rồi hệ thống đánh giá lại.'
-    : crit && !notified ? 'Giá trị tới hạn: ghi nhận đã thông báo lâm sàng trước khi duyệt.' : '';
-  return `<form class="action-panel" id="actForm">
-    <div class="seg" role="radiogroup" aria-label="Hành động">${acts.map(a => `<label class="${disabled(a) ? 'disabled' : ''}"><input type="radio" name="action" value="${a}" ${a === def ? 'checked' : ''} ${disabled(a) ? 'disabled' : ''}><span>${ACTION_LABEL[a]}</span></label>`).join('')}</div>
-    ${hint ? `<p class="hint">${hint}</p>` : ''}
-    <div class="form-grid">
-      <label>Lý do <select name="reasonCode" id="reasonCode"></select></label>
-      <label>Xác minh <select name="verification">${Object.entries(VERIFY_TXT).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
-      <label class="span2">Ghi chú <textarea name="note" maxlength="1000" rows="2" placeholder="Bắt buộc khi giữ lại / yêu cầu kiểm tra"></textarea></label>
+// Status of the doctor's decision for this version (shown above the suggestion).
+function statusBanner(d) {
+  const s = d.send.current, rv = d.review;
+  switch (d.workState) {
+    case 'SIGN_FAILED': return `<div class="banner blocked"><div><b>Ký lỗi — phiếu chưa được ký.</b> ${esc(s.error)}<div class="small muted">Bác sĩ đã bấm ký lúc ${fmtHour(rv.at)}; lỗi lúc ${fmtHour(s.failedAt)}. Bấm "Ký lại" bên dưới, hoặc chọn thao tác khác.</div></div></div>`;
+    case 'IN_QUEUE': return `<div class="banner info"><div><span class="spin" aria-hidden="true"></span><b>${s.status === 'SIGNING' ? 'Đang gửi sang hệ thống ký của bệnh viện…' : `Trong hàng đợi ký — vị trí ${d.queuePosition ?? '?'}`}</b><div class="small muted">Bác sĩ bấm ký lúc ${fmtHour(rv.at)}. Có thể chuyển sang phiếu khác, không cần chờ.</div></div>${s.status === 'QUEUED' ? '<button type="button" class="btn" id="cancelSignBtn">Rút lệnh ký</button>' : ''}</div>`;
+    case 'SIGNED': return `<div class="banner auto"><div><b>✓ Đã ký</b> lúc ${fmtHour(s.signedAt)} <span class="muted small mono">${esc(s.signId)}</span></div></div>`;
+    case 'FLAGGED': return `<div class="banner review"><div><b>Đã đánh dấu cần xem xét lại</b> lúc ${fmtHour(rv.at)}${rv.reasonCode ? ' · ' + esc(REASON_TXT[rv.reasonCode]) : ''}${rv.note ? `<div class="small">${esc(rv.note)}</div>` : ''}</div></div>`;
+    case 'RERUN_REQUESTED': return `<div class="banner info"><div><b>Đã yêu cầu chạy lại:</b> ${esc((rv.tests ?? []).join(', '))}${rv.reasonCode ? ' · ' + esc(REASON_TXT[rv.reasonCode]) : ''}${rv.note ? `<div class="small">${esc(rv.note)}</div>` : ''}<div class="small muted">Khi máy gửi kết quả mới, phiếu thành phiên bản mới và quay về "Chờ duyệt".</div></div></div>`;
+    default: return '';
+  }
+}
+
+function actionBar(d, ev) {
+  if (['IN_QUEUE', 'SIGNED'].includes(d.workState)) return '';
+  const blocked = ev.decision === 'BLOCKED', crit = ev.criticalValue;
+  return `<div class="action-bar" id="actionBar">
+    ${crit && !blocked ? `<label class="crit-confirm"><input type="checkbox" id="critOk"><span>Đã thông báo giá trị tới hạn cho lâm sàng</span></label>` : ''}
+    ${blocked ? '<p class="hint">Phiếu có lỗi dữ liệu/QC/mẫu nên chưa ký được. Hãy yêu cầu chạy lại mẫu (hoặc xử lý), hệ thống sẽ đọc lại phiên bản mới.</p>' : ''}
+    <div class="btn-row">
+      <button type="button" class="btn sign" ${d.workState === 'SIGN_FAILED' ? 'id="resignBtn"' : 'data-act="SIGN"'} ${blocked ? 'disabled' : ''}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18"/><path d="m5 17 4-1 9.5-9.5a2.1 2.1 0 0 0-3-3L6 13l-1 4Z"/></svg>${d.workState === 'SIGN_FAILED' ? 'Ký lại' : 'Ký'}</button>
+      <button type="button" class="btn" data-act="FLAG_REVIEW" ${d.workState === 'FLAGGED' ? 'disabled' : ''}>Cần xem xét lại</button>
+      <button type="button" class="btn" data-act="REQUEST_RERUN">Yêu cầu chạy lại mẫu</button>
     </div>
-    <div class="row-between"><span class="muted small">Phản hồi được lưu để rà soát; rule đang chạy không thay đổi.</span><button class="btn primary" type="submit">Ghi nhận</button></div>
-  </form>`;
+    <div id="subForm"></div>
+  </div>`;
+}
+
+function subForm(kind, d, ev) {
+  const reasons = meta.reasons[kind] ?? [];
+  const chips = `<div class="chips" role="radiogroup" aria-label="Lý do">${reasons.map(r => `<label class="chip"><input type="radio" name="reasonCode" value="${r}"><span>${esc(REASON_TXT[r] ?? r)}</span></label>`).join('')}</div>`;
+  if (kind === 'FLAG_REVIEW') return `<form class="sub" id="actSub"><p class="sub-title">Cần xem xét lại — lý do (không bắt buộc)</p>${chips}
+    <textarea name="note" rows="2" maxlength="1000" placeholder="Ghi chú cho lần xem lại (không bắt buộc)"></textarea>
+    <div class="row-end"><button type="button" class="btn ghost" data-cancel>Hủy</button><button type="submit" class="btn primary">Đánh dấu xem lại</button></div></form>`;
+  const flagged = new Set(Object.entries(ev.analyteStatus).filter(([, v]) => v !== 'OK').map(([t]) => t));
+  return `<form class="sub" id="actSub"><p class="sub-title">Chạy lại xét nghiệm nào?</p>
+    <div class="chips">${d.report.orderedTests.map(t => `<label class="chip ${flagged.has(t) ? 'flagged' : ''}"><input type="checkbox" name="tests" value="${esc(t)}" ${flagged.has(t) ? 'checked' : ''}><span>${esc(d.analyteInfo[t].name)}</span></label>`).join('')}</div>
+    <p class="sub-title">Cách làm (không bắt buộc)</p>${chips}
+    <textarea name="note" rows="2" maxlength="1000" placeholder="Ghi chú cho kỹ thuật viên (không bắt buộc)"></textarea>
+    <div class="row-end"><button type="button" class="btn ghost" data-cancel>Hủy</button><button type="submit" class="btn primary">Gửi yêu cầu chạy lại</button></div></form>`;
 }
 
 function amendForm(d, ev) {
   const r = d.report;
-  const problem = new Set(ev.checks.filter(c => c.action).flatMap(c => c.analytes));
-  const tests = [...r.orderedTests.filter(t => problem.has(t)), ...r.orderedTests.filter(t => !problem.has(t))];
-  return `<form id="amendForm" class="stack">
+  const want = new Set(d.review?.action === 'REQUEST_RERUN' ? d.review.tests : Object.entries(ev.analyteStatus).filter(([, v]) => v !== 'OK').map(([t]) => t));
+  const tests = [...r.orderedTests.filter(t => want.has(t)), ...r.orderedTests.filter(t => !want.has(t))];
+  return `<p class="muted small">Dùng để mô phỏng máy gửi kết quả chạy lại / kỹ thuật viên sửa dữ liệu. Mỗi lần lưu tạo phiên bản mới, hệ thống đọc lại và phiếu quay về "Chờ duyệt".</p>
+  <form id="amendForm" class="stack">
     <div class="form-grid"><label>Loại cập nhật <select name="kind"><option value="RERUN">Chạy lại mẫu</option><option value="UNIT_FIX">Sửa lỗi đơn vị/giao tiếp</option><option value="RECOLLECT">Lấy mẫu mới</option><option value="MANUAL_CORRECTION">Hiệu chỉnh thủ công</option></select></label>
       <label class="toggle"><input type="checkbox" name="clearFlags"><span>Xóa cờ máy sau chạy lại</span></label></div>
     ${r.discipline === 'CHEM' ? `<div class="form-grid three">${['H', 'L', 'I'].map(k => `<label>HIL mới ${k}<input type="number" name="hil${k}" min="0"></label>`).join('')}</div>` : ''}
-    <div class="tablewrap"><table class="results"><thead><tr><th>Xét nghiệm</th><th>Hiện tại</th><th>Giá trị mới</th></tr></thead><tbody>
-    ${tests.map(t => { const x = r.results.find(q => q.test === t); return `<tr><td>${esc(d.analyteInfo[t].name)}${problem.has(t) ? ' <span class="tag review">liên quan</span>' : ''}</td><td class="muted">${esc(x?.status === 'RESULTED' ? `${x.value} ${x.unit || '(thiếu đơn vị)'}` : RESULT_STATUS[x?.status] ?? '—')}</td>
+    <div class="tablewrap"><table class="lab"><thead><tr><th>Xét nghiệm</th><th>Hiện tại</th><th>Giá trị mới</th></tr></thead><tbody>
+    ${tests.map(t => { const x = r.results.find(q => q.test === t); return `<tr><td>${esc(d.analyteInfo[t].name)}${want.has(t) ? ' <span class="tag review">cần chạy lại</span>' : ''}</td><td class="muted">${esc(x?.status === 'RESULTED' ? `${x.value} ${x.unit || '(thiếu đơn vị)'}` : RESULT_STATUS[x?.status] ?? '—')}</td>
       <td><input type="number" step="any" name="v_${esc(t)}" aria-label="Giá trị mới ${esc(t)}" placeholder="${esc(d.analyteInfo[t].unit)}"></td></tr>`; }).join('')}
     </tbody></table></div>
     <label>Lý do cập nhật <textarea name="note" required maxlength="1000" rows="2" placeholder="VD: QC đạt lại lúc 11:40, chạy lại K"></textarea></label>
-    <div class="row-end"><button class="btn" type="submit">Lưu phiên bản mới & đánh giá lại</button></div>
+    <div class="row-end"><button class="btn" type="submit">Lưu phiên bản mới</button></div>
   </form>`;
 }
 
 const fold = (title, body, { open = false, count = '' } = {}) => `<details class="fold" ${open ? 'open' : ''}><summary><span>${title}</span>${count !== '' ? `<em>${count}</em>` : ''}</summary><div class="fold-body">${body}</div></details>`;
 
 function renderDetail() {
-  const d = current, r = d.report, ev = d.evaluation, s = r.scenario, tr = d.simulationTruth;
-  const failing = ev.checks.filter(c => c.action).length;
-  const passCount = ev.checks.filter(c => c.status === 'PASS').length;
+  const d = current, r = d.report, ev = d.evaluation, s = r.scenario, tr = d.simulationTruth, c = r.context;
+  const failing = ev.checks.filter(x => x.action).length, passCount = ev.checks.filter(x => x.status === 'PASS').length;
+  const [wcls, wtxt] = WORK[d.workState];
   $('#detail').innerHTML = `
-    <header class="detail-head">
-      <div><p class="eyebrow">${r.discipline === 'CHEM' ? 'Hóa sinh' : 'Huyết học'} · ${esc(r.panelName)} · ${WARD[r.ward]}</p>
-        <h2>${esc(s?.title ?? r.reportId)}</h2>
-        <p class="muted small mono">${esc(r.reportId)} · v${r.version} · ${esc(ev.rulesetVersion)} · ${{ OFF: 'ngưỡng chung', TIGHTEN: 'ngưỡng cá nhân (siết)', ADAPT: 'ngưỡng cá nhân (siết + nới)' }[ev.personalMode] ?? ''}</p></div>
-      <div class="decision ${ev.criticalValue ? 'crit' : DECISION[ev.decision].cls}"><span class="decision-ic" aria-hidden="true">${ev.criticalValue ? '⚠' : DECISION[ev.decision].icon}</span><div><strong>${DECISION[ev.decision].label}</strong>${ev.criticalValue ? '<span>Ưu tiên: giá trị tới hạn</span>' : '<span>Đơn vị ký: cả phiếu</span>'}</div></div>
+    <header class="rpt-head">
+      <div><p class="eyebrow">${r.discipline === 'CHEM' ? 'Hóa sinh' : 'Huyết học'} · ${esc(r.panelName)} · ${WARD[r.ward] ?? esc(r.ward)}</p>
+        <h2>${esc(r.subjectToken)} <span class="who">${c.sex === 'F' ? 'Nữ' : 'Nam'} · ${esc(c.ageGroup || c.age)} tuổi</span></h2>
+        <p class="muted small">Phiếu <span class="mono">${esc(r.reportId)}</span>${r.version > 1 ? ` · phiên bản ${r.version}` : ''} · Lấy mẫu ${fmtHour(r.specimen.collectedAt)} · Nhận ${fmtHour(r.specimen.receivedAt)}</p></div>
+      <span class="badge ${wcls}">${wtxt}</span>
     </header>
-    ${s ? `<p class="scenario-note"><span class="tag gold">${esc(s.code)}</span> ${esc(s.story)}</p>` : ''}
-    <section class="block">
-      <h3>${failing ? `Vì sao ${ev.decision === 'BLOCKED' ? 'bị chặn' : 'cần xem'}` : 'Đạt mọi điều kiện'}</h3>
-      ${failing ? reasonList(ev) : `<p class="ok-line">✓ ${passCount} kiểm tra đạt, đủ dữ liệu bắt buộc. ${meta.settings.mode === 'SHADOW' ? 'Chế độ chạy ngầm: chỉ ghi đề xuất.' : 'Sẽ được ký mô phỏng khi chạy lô.'}</p>`}
-      ${llmBlock()}
-    </section>
-    <section class="block"><h3>Kết quả <span class="muted small">${r.results.filter(x => x.status === 'RESULTED').length}/${r.orderedTests.length} chỉ số</span></h3>${resultsTable(d, ev)}</section>
-    <section class="block"><h3>Thao tác</h3>
-      ${d.review ? `<p class="done-line">Đã ghi nhận: <b>${esc(ACTION_LABEL[d.review.action])}</b> · ${esc(REASON_TXT[d.review.reasonCode] ?? d.review.reasonCode)} · ${fmtHour(d.review.at)}${d.review.note ? ' — ' + esc(d.review.note) : ''}</p>` : ''}
-      ${actionPanel(d, ev)}
-      ${d.send.current || d.send.superseded.length ? `<div class="send-line">${sendBlock(d)}</div>` : ''}
-    </section>
+    ${statusBanner(d)}
+    ${resultsTable(d, ev)}
+    <p class="legend-line muted small"><span class="hf h">H</span>/<span class="hf l">L</span> cao/thấp hơn khoảng tham chiếu · dòng tô màu: hệ thống thấy cần chú ý (đỏ: lỗi chặn, tím: tới hạn, cam: cần xem).</p>
+    ${suggestionBox(ev, r)}
+    ${actionBar(d, ev)}
     <div class="folds">
-      ${fold('Bối cảnh, mẫu & thiết bị', contextBlock(r))}
-      ${fold('Tất cả bước kiểm tra', allChecks(ev), { count: `${passCount} đạt · ${failing} không đạt` })}
-      ${fold('Mô hình phát hiện lỗi (cục bộ)', modelsBlock(ev), { count: ev.models?.some(m => m.flagged) ? 'có gắn cờ' : '' })}
-      ${fold('Cập nhật kết quả (tạo phiên bản mới)', amendForm(d, ev), { open: ev.decision === 'BLOCKED' && !d.amendments.length })}
-      ${fold('Ký/gửi & nhật ký phiếu', sendBlock(d) + timeline(d.audit), { count: d.audit.length || '' })}
+      ${fold('Thông tin mẫu & bối cảnh', (s ? `<p class="scenario-note"><span class="tag gold">${esc(s.code)}</span> ${esc(s.story)}</p>` : '') + contextBlock(r))}
+      ${fold('Chi tiết các bước kiểm tra của hệ thống', allChecks(ev) + '<h4 class="sub-h">Mô hình phát hiện lỗi</h4>' + modelsBlock(ev), { count: `${passCount} đạt · ${failing} cần chú ý` })}
+      ${fold('Nhận kết quả chạy lại (mô phỏng máy gửi lên LIS)', amendForm(d, ev), { open: d.workState === 'RERUN_REQUESTED' })}
+      ${fold('Lịch sử ký & thao tác', sendHistory(d) + timeline(d.audit), { count: d.audit.length || '' })}
       ${tr ? fold('Nhãn giả lập (ground truth)', `<dl class="kv"><dt>Lỗi mẫu</dt><dd>${esc(tr.truth.sampleError ? ERR_TXT[tr.truth.sampleError] ?? tr.truth.sampleError : 'Không')}</dd><dt>Lỗi dữ liệu</dt><dd>${esc(tr.truth.dataIssue ?? 'Không')}</dd><dt>Tới hạn</dt><dd>${tr.truth.criticalValue ? 'Có' : 'Không'}</dd><dt>Người duyệt mô phỏng</dt><dd>${esc(tr.simulatedReviewer?.action ?? '—')}</dd><dt>Tập</dt><dd>${esc(tr.split)}</dd></dl>${tr.truth.details ? `<p class="small">${esc(tr.truth.details)}</p>` : ''}<p class="muted small">"Người duyệt đã duyệt" khác "kết quả đúng".</p>`, { open: true }) : ''}
     </div>`;
   wireDetail(d);
@@ -317,32 +507,59 @@ function renderDetail() {
 function llmBlock() {
   const st = meta.llm ?? { configured: false, reason: 'Server chưa hỗ trợ LLM.' };
   return `<div class="llm-box" id="llmBox">
-    <div class="row-between"><div><strong>Diễn giải bằng LLM</strong> <span class="muted small">${esc(st.model ?? '')} · tùy chọn</span></div>
-      <button type="button" class="btn ghost" id="llmBtn" ${st.configured ? '' : 'disabled'}>Diễn giải</button></div>
-    <div id="llmOut" class="small">${st.configured ? '<span class="muted">LLM chỉ diễn giải lý do hệ thống đã đưa ra và gợi ý kiểm tra; không quyết định ký. Dữ liệu gửi đi đã khử định danh.</span>' : `<span class="muted">${esc(st.reason)}</span>`}</div></div>`;
+    <div class="row-between"><span class="small"><b>Diễn giải chi tiết bằng LLM</b> <span class="muted">tùy chọn</span></span>
+      <button type="button" class="btn ghost small-btn" id="llmBtn" ${st.configured ? '' : 'disabled'} title="${esc(st.configured ? 'LLM chỉ diễn giải, không quyết định ký' : st.reason)}">Diễn giải</button></div>
+    <div id="llmOut" class="small"></div></div>`;
+}
+
+async function doAction(d, body, okMsg) {
+  try {
+    await post(`/api/reports/${encodeURIComponent(d.report.reportId)}/action`, body);
+    toast(okMsg);
+    await advance(d.report.reportId);
+  } catch (err) { toast(err.message, 'error'); }
 }
 
 function wireDetail(d) {
+  const ev = d.evaluation, id = encodeURIComponent(d.report.reportId);
   $('#llmBtn')?.addEventListener('click', async e => {
     const btn = e.currentTarget; btn.disabled = true; $('#llmOut').innerHTML = '<span class="muted">Đang gọi LLM…</span>';
     try {
-      const r = await post(`/api/reports/${encodeURIComponent(d.report.reportId)}/explain`, {});
-      $('#llmOut').innerHTML = `<div class="llm-text">${esc(r.text).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/`([^`\n]+)`/g, '<code>$1</code>').replaceAll('\n', '<br>')}</div><p class="muted small">${esc(r.model)} · ${r.latencyMs} ms · ${esc(r.disclaimer)}</p>`;
+      const r = await post(`/api/reports/${id}/explain`, {});
+      $('#llmOut').innerHTML = `<div class="llm-text">${esc(r.text).replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>').replace(/`([^`\n]+)`/g, '<code>$1</code>').replaceAll('\n', '<br>')}</div><p class="muted small">${r.latencyMs} ms · ${esc(r.disclaimer)}</p>`;
     } catch (err) { $('#llmOut').innerHTML = `<span class="status-txt blocked">${esc(err.message)}</span>`; }
     finally { btn.disabled = false; }
   });
-  const form = $('#actForm');
-  const fillReasons = () => { $('#reasonCode').innerHTML = meta.reasons[form.action.value].map(code => `<option value="${code}">${esc(REASON_TXT[code] ?? code)}</option>`).join(''); };
-  form.querySelectorAll('input[name=action]').forEach(i => i.addEventListener('change', fillReasons));
-  fillReasons();
-  form.addEventListener('submit', async e => {
-    e.preventDefault();
-    const fd = new FormData(form);
-    try {
-      current = await post(`/api/reports/${encodeURIComponent(d.report.reportId)}/action`, Object.fromEntries(fd));
-      toast(fd.get('action') === 'APPROVE' ? 'Đã duyệt — đang gửi, chờ ACK…' : 'Đã ghi nhận. Rule đang chạy không thay đổi.');
-      await refresh(); if (fd.get('action') === 'APPROVE') setTimeout(refresh, 2200);
-    } catch (err) { toast(err.message); }
+  document.querySelectorAll('#actionBar [data-act]').forEach(b => b.addEventListener('click', () => {
+    const act = b.dataset.act;
+    if (act === 'SIGN') {
+      const crit = $('#critOk');
+      if (crit && !crit.checked) { crit.closest('label').classList.add('need'); crit.focus(); toast('Phiếu có giá trị tới hạn: xác nhận đã thông báo lâm sàng trước khi ký.', 'error'); return; }
+      askNotificationPermission();
+      b.disabled = true;
+      return doAction(d, { action: 'SIGN', criticalNotified: !!crit?.checked }, 'Đã đưa vào hàng đợi ký — chuyển sang phiếu tiếp theo.');
+    }
+    const box = $('#subForm');
+    if (box.dataset.kind === act) { box.innerHTML = ''; box.dataset.kind = ''; return; }
+    box.dataset.kind = act; box.innerHTML = subForm(act, d, ev);
+    document.querySelectorAll('#actionBar [data-act]').forEach(x => x.classList.toggle('active', x.dataset.act === act));
+    const f = $('#actSub');
+    f.querySelector('[data-cancel]').addEventListener('click', () => { box.innerHTML = ''; box.dataset.kind = ''; document.querySelectorAll('#actionBar [data-act]').forEach(x => x.classList.remove('active')); });
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      const fd = new FormData(f);
+      const body = { action: act, reasonCode: fd.get('reasonCode') || null, note: fd.get('note') ?? '' };
+      if (act === 'REQUEST_RERUN') body.tests = fd.getAll('tests');
+      doAction(d, body, act === 'FLAG_REVIEW' ? 'Đã chuyển sang "Xem xét lại".' : `Đã gửi yêu cầu chạy lại: ${body.tests.join(', ')}.`);
+    });
+    f.querySelector('input, textarea')?.focus();
+  }));
+  $('#resignBtn')?.addEventListener('click', async e => {
+    e.currentTarget.disabled = true;
+    try { await post(`/api/reports/${id}/resign`, {}); toast('Đã đưa lại vào hàng đợi ký.'); await advance(d.report.reportId); } catch (err) { toast(err.message, 'error'); await refresh(); }
+  });
+  $('#cancelSignBtn')?.addEventListener('click', async () => {
+    try { current = await post(`/api/reports/${id}/cancel-sign`, {}); toast('Đã rút lệnh ký — phiếu trở về "Chờ duyệt".'); tab = 'todo'; await refresh(); } catch (err) { toast(err.message, 'error'); await refresh(); }
   });
   $('#amendForm')?.addEventListener('submit', async e => {
     e.preventDefault();
@@ -350,13 +567,10 @@ function wireDetail(d) {
     const changes = d.report.orderedTests.filter(t => fd.get('v_' + t)).map(t => ({ test: t, value: Number(fd.get('v_' + t)), unit: d.analyteInfo[t].unit }));
     const hil = ['H', 'L', 'I'].every(k => fd.get('hil' + k)) ? { H: Number(fd.get('hilH')), L: Number(fd.get('hilL')), I: Number(fd.get('hilI')) } : null;
     try {
-      current = await post(`/api/reports/${encodeURIComponent(d.report.reportId)}/amend`, { kind: fd.get('kind'), changes, note: fd.get('note'), clearFlags: fd.get('clearFlags') === 'on', hil });
-      toast(`Đã tạo v${current.report.version} → ${DECISION[current.evaluation.decision].label}`);
-      await refresh();
-    } catch (err) { toast(err.message); }
-  });
-  $('#retrySend')?.addEventListener('click', async () => {
-    try { current = await post(`/api/reports/${encodeURIComponent(d.report.reportId)}/retry-send`, {}); toast('Đang gửi lại…'); await refresh(); setTimeout(refresh, 2200); } catch (err) { toast(err.message); }
+      current = await post(`/api/reports/${id}/amend`, { kind: fd.get('kind'), changes, note: fd.get('note'), clearFlags: fd.get('clearFlags') === 'on', hil });
+      toast(`Phiên bản ${current.report.version}: ${DECISION[current.evaluation.decision].label} — đã về "Chờ duyệt"`);
+      tab = 'todo'; await refresh();
+    } catch (err) { toast(err.message, 'error'); }
   });
 }
 
@@ -372,7 +586,7 @@ function renderTry() {
   if (v.dataset.ready) return;
   v.dataset.ready = '1';
   v.innerHTML = `<div class="two-col">
-    <div class="card"><p class="lead">Nhập vài kết quả để xem hệ thống quyết định thế nào. Ô trống nghĩa là <b>chưa có kết quả</b>, không phải 0. Dữ liệu nhập thử không vào hàng đợi.</p>
+    <div class="card"><p class="lead">Nhập vài kết quả để xem hệ thống đề xuất thế nào. Ô trống nghĩa là <b>chưa có kết quả</b>, không phải 0. Dữ liệu nhập thử không vào danh sách duyệt.</p>
     <form id="tryForm" class="stack">
       <div class="form-grid">
         <label>Bảng xét nghiệm <select name="panel">${Object.entries(meta.panels).map(([k, p]) => `<option value="${k}">${esc(p.name)}</option>`).join('')}</select></label>
@@ -388,12 +602,12 @@ function renderTry() {
       <div id="tryTable"></div>
       <div class="row-between"><span><button class="btn ghost" type="button" id="fillNormal">Điền mẫu bình thường</button> <button class="btn ghost" type="button" id="fillEdta">Ví dụ nghi EDTA</button></span><button class="btn primary" type="submit">Đánh giá</button></div>
     </form></div>
-    <div class="card" id="tryOut"><p class="empty">Kết quả đánh giá sẽ hiện ở đây.</p></div></div>`;
+    <div class="card" id="tryOut"><p class="empty">Đề xuất của hệ thống sẽ hiện ở đây.</p></div></div>`;
   const form = $('#tryForm');
   const drawTable = () => {
     const panel = meta.panels[form.panel.value];
     $('#hilRow').hidden = panel.discipline !== 'CHEM';
-    $('#tryTable').innerHTML = `<div class="tablewrap"><table class="results"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Đơn vị</th><th>Lần trước</th><th>Cách (ngày)</th></tr></thead><tbody>
+    $('#tryTable').innerHTML = `<div class="tablewrap"><table class="lab"><thead><tr><th>Xét nghiệm</th><th>Kết quả</th><th>Đơn vị</th><th>Lần trước</th><th>Cách (ngày)</th></tr></thead><tbody>
       ${panel.tests.map(t => { const a = meta.analytes[t]; const units = [a.unit, ...Object.keys(a.altUnits ?? {}).filter(u => u !== a.unit), '']; return `<tr><td>${esc(a.name)}</td>
         <td><input type="number" step="any" name="v_${t}" aria-label="${esc(a.name)}"></td>
         <td><select name="u_${t}" aria-label="Đơn vị ${esc(a.name)}">${units.map(u => `<option value="${esc(u)}">${u ? esc(u) : '(thiếu)'}</option>`).join('')}</select></td>
@@ -414,11 +628,10 @@ function renderTry() {
         hil: { H: fd.get('hilH'), L: fd.get('hilL'), I: fd.get('hilI') }, flags: fd.getAll('flag'), values, history: hist });
       const ev = out.evaluation;
       const histMap = {}; for (const h of hist) (histMap[h.test] ??= []).push({ value: Number(h.value), measuredAt: new Date(Date.now() - h.daysAgo * 864e5).toISOString() });
-      $('#tryOut').innerHTML = `<div class="decision ${ev.criticalValue ? 'crit' : DECISION[ev.decision].cls}"><span class="decision-ic" aria-hidden="true">${DECISION[ev.decision].icon}</span><div><strong>${DECISION[ev.decision].label}</strong><span>${ev.criticalValue ? 'Có giá trị tới hạn' : 'Đánh giá thử, không lưu vào hàng đợi'}</span></div></div>
-        <section class="block">${ev.checks.some(c => c.action) ? reasonList(ev) : '<p class="ok-line">✓ Đạt mọi điều kiện áp dụng.</p>'}</section>
-        <section class="block">${resultsTable({ report: out.report, analyteInfo: out.analyteInfo, history: histMap }, ev)}</section>
-        ${fold('Tất cả bước kiểm tra', allChecks(ev))}${fold('Mô hình phát hiện lỗi (cục bộ)', modelsBlock(ev))}`;
-    } catch (err) { toast(err.message); }
+      $('#tryOut').innerHTML = `${suggestionBox(ev, out.report, { llm: false })}
+        ${resultsTable({ report: out.report, analyteInfo: out.analyteInfo, history: histMap }, ev)}
+        ${fold('Chi tiết các bước kiểm tra', allChecks(ev))}${fold('Mô hình phát hiện lỗi', modelsBlock(ev))}`;
+    } catch (err) { toast(err.message, 'error'); }
   });
 }
 
@@ -497,12 +710,12 @@ async function renderEval() {
 async function renderFeedback() {
   const fb = await api('/api/feedback');
   const agree = fb.filter(f => f.agreement === 'ĐỒNG Ý').length;
-  $('#view-feedback').innerHTML = `<div class="notice">Mỗi thao tác của người phụ trách được lưu kèm phiên bản rule/mô hình. Phản hồi <b>không</b> thay đổi rule đang chạy: rà soát nhãn → huấn luyện ngoại tuyến → đánh giá độc lập → phê duyệt phiên bản mới.</div>
-    <div class="stats static"><div class="stat"><span>Bản ghi phản hồi</span><strong>${fb.length}</strong></div><div class="stat"><span>Đồng ý với hệ thống</span><strong>${agree}</strong></div><div class="stat"><span>Khác hệ thống</span><strong>${fb.length - agree}</strong></div><div class="stat"><span>Đã xác minh</span><strong>${fb.filter(f => f.verification !== 'NOT_VERIFIED').length}</strong></div></div>
+  $('#view-feedback').innerHTML = `<div class="notice">Mỗi quyết định của bác sĩ (ký / xem xét lại / chạy lại) được lưu cạnh đề xuất của hệ thống và phiên bản rule/mô hình. Phản hồi <b>không</b> thay đổi rule đang chạy: rà soát nhãn → huấn luyện ngoại tuyến → đánh giá độc lập → phê duyệt phiên bản mới.</div>
+    <div class="stats static"><div class="stat"><span>Bản ghi phản hồi</span><strong>${fb.length}</strong></div><div class="stat"><span>Đồng ý với hệ thống</span><strong>${agree}</strong></div><div class="stat"><span>Khác hệ thống</span><strong>${fb.length - agree}</strong></div><div class="stat"><span>Yêu cầu chạy lại</span><strong>${fb.filter(f => f.reviewerAction === 'REQUEST_RERUN').length}</strong></div></div>
     <div class="row-end"><a class="btn" href="/api/feedback.csv" download>Xuất CSV</a></div>
-    ${fb.length ? `<div class="card flush"><div class="tablewrap"><table class="results"><thead><tr><th>Phiếu</th><th>Hệ thống</th><th>Người phụ trách</th><th>Lý do</th><th>Xác minh</th><th>Nhãn</th></tr></thead><tbody>
+    ${fb.length ? `<div class="card flush"><div class="tablewrap"><table class="results"><thead><tr><th>Phiếu</th><th>Hệ thống đề xuất</th><th>Bác sĩ</th><th>Lý do / ghi chú</th><th>Nhãn</th></tr></thead><tbody>
     ${[...fb].reverse().map(f => `<tr><td><a href="#" data-open="${esc(f.reportId)}">${esc(f.reportId)}</a> <span class="muted">v${esc(f.version)}</span></td><td>${badge(f.systemDecision, true)}</td>
-      <td>${esc(ACTION_LABEL[f.reviewerAction])} ${f.agreement === 'ĐỒNG Ý' ? '' : '<span class="tag gold">khác</span>'}</td><td>${esc(REASON_TXT[f.reasonCode] ?? f.reasonCode)}${f.note ? `<div class="muted small">${esc(f.note)}</div>` : ''}</td><td>${esc(VERIFY_TXT[f.verification] ?? f.verification)}</td><td><span class="tag">${esc(f.labelStatus)}</span></td></tr>`).join('')}</tbody></table></div></div>` : '<div class="card"><p class="empty">Chưa có phản hồi. Mở một phiếu trong hàng đợi và ghi nhận thao tác.</p></div>'}`;
+      <td>${esc(ACTION_LABEL[f.reviewerAction])} ${f.agreement === 'ĐỒNG Ý' ? '' : '<span class="tag gold">khác</span>'}</td><td>${f.tests?.length ? `Chạy lại: ${esc(f.tests.join(", "))}. ` : ""}${esc(f.reasonCode ? REASON_TXT[f.reasonCode] ?? f.reasonCode : "—")}${f.note ? `<div class="muted small">${esc(f.note)}</div>` : ''}</td><td><span class="tag">${esc(f.labelStatus)}</span></td></tr>`).join('')}</tbody></table></div></div>` : '<div class="card"><p class="empty">Chưa có phản hồi. Mở một phiếu và bấm Ký / Cần xem xét lại / Yêu cầu chạy lại mẫu.</p></div>'}`;
   document.querySelectorAll('[data-open]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); showView('worklist'); select(a.dataset.open); }));
 }
 
@@ -511,15 +724,15 @@ async function renderAudit() {
   $('#view-audit').innerHTML = `<div class="row-between"><p class="muted">Đánh giá, thao tác, gửi/ACK và thay đổi cấu hình (500 sự kiện gần nhất).</p><button class="btn danger" type="button" id="reset">Xóa trạng thái demo</button></div>
     ${list.length ? `<div class="card flush"><div class="tablewrap"><table class="results"><thead><tr><th>Thời điểm</th><th>Sự kiện</th><th>Phiếu</th><th>Nội dung</th></tr></thead><tbody>
     ${list.map(a => `<tr><td class="muted">${fmtTime(a.at)}</td><td><span class="mono small">${esc(a.type)}</span><div class="muted small">${esc(a.actor)}</div></td><td>${a.reportId ? esc(a.reportId) + (a.version ? ' v' + esc(a.version) : '') : '—'}</td><td>${esc(a.note ?? '')}</td></tr>`).join('')}</tbody></table></div></div>` : '<div class="card"><p class="empty">Chưa có sự kiện.</p></div>'}`;
-  $('#reset').addEventListener('click', async () => { if (!confirm('Xóa toàn bộ phản hồi, nhật ký và phiên bản sửa của demo?')) return; await post('/api/reset'); toast('Đã xóa trạng thái demo'); await refresh(); renderAudit(); });
+  $('#reset').addEventListener('click', async () => { if (!confirm('Xóa toàn bộ phản hồi, nhật ký và phiên bản sửa của demo?')) return; try { await post('/api/reset'); toast('Đã xóa trạng thái demo'); tab = 'todo'; await refresh(); renderAudit(); } catch (err) { toast(err.message, 'error'); } });
 }
 
 // ---------------- rules (human-readable) ----------------
 let rulesTab = 'CHEM';
 const TODO = {
-  BLOCK: 'Xử lý nguyên nhân theo SOP (chạy lại, sửa dữ liệu, lấy mẫu mới…) rồi "Cập nhật kết quả" để hệ thống đánh giá lại. Không thể duyệt trực tiếp.',
-  REVIEW: 'Người phụ trách xem lý do và quyết định: duyệt, giữ lại hoặc yêu cầu kiểm tra bổ sung — ghi lý do.',
-  CRITICAL: 'Thông báo lâm sàng ngay, bấm "Đã báo tới hạn" trên phiếu, sau đó mới duyệt.'
+  BLOCK: 'Hệ thống đề xuất chưa ký: bác sĩ bấm "Yêu cầu chạy lại mẫu" (hoặc xử lý dữ liệu/QC). Kết quả mới thành phiên bản mới, hệ thống đọc lại và phiếu quay về chờ duyệt.',
+  REVIEW: 'Dòng kết quả liên quan được tô màu kèm lý do. Bác sĩ đọc và quyết định: Ký, Cần xem xét lại hoặc Yêu cầu chạy lại mẫu.',
+  CRITICAL: 'Thông báo lâm sàng ngay; khi ký, bác sĩ tick "Đã thông báo giá trị tới hạn cho lâm sàng".'
 };
 async function renderRules() {
   const { rulesets, catalog } = await api('/api/rules');
@@ -530,12 +743,12 @@ async function renderRules() {
   $('#view-rules').innerHTML = `
     <div class="row-between wrap">
       <div class="seg tabs-seg" role="tablist">${[['CHEM', 'Hóa sinh'], ['HEME', 'Huyết học (CBC)']].map(([k, l]) => `<button type="button" role="tab" aria-selected="${rulesTab === k}" data-rt="${k}">${l}</button>`).join('')}</div>
-      <div class="legend-out">${outcomeBadge('BLOCK')} <span class="muted small">không ký được</span> ${outcomeBadge('REVIEW')} <span class="muted small">người phụ trách quyết định</span> ${outcomeBadge('CRITICAL')} <span class="muted small">ưu tiên, phải báo lâm sàng</span></div>
+      <div class="legend-out">${outcomeBadge('BLOCK')} <span class="muted small">đề xuất chưa ký</span> ${outcomeBadge('REVIEW')} <span class="muted small">tô màu để bác sĩ chú ý</span> ${outcomeBadge('CRITICAL')} <span class="muted small">ưu tiên, phải báo lâm sàng</span></div>
     </div>
     <div class="card ruleset-head"><div><h3>${esc(s.rulesetId)} <span class="muted mono small">${esc(s.version)}</span></h3><p class="muted small">${esc(s.note)}</p></div>
       <dl class="kv compact"><dt>Trạng thái</dt><dd><span class="tag gold">${esc(s.status)}</span></dd><dt>Người phê duyệt</dt><dd>${s.approvedBy ? esc(s.approvedBy) : '<b>Chưa có</b>'}</dd><dt>Hiệu lực từ</dt><dd>${esc(s.effectiveFrom)}</dd>
       <dt>Số rule</dt><dd>${s.rules.length} — ${byOutcome('BLOCK')} chặn · ${byOutcome('REVIEW')} chuyển xem · ${byOutcome('CRITICAL')} tới hạn</dd></dl></div>
-    <p class="muted small">Đánh giá theo thứ tự từ trên xuống. Một phiếu bị <b>chặn</b> nếu có bất kỳ rule chặn nào; nếu không, phiếu <b>cần xem</b> nếu có rule chuyển xem/tới hạn; chỉ khi không rule nào kích hoạt phiếu mới đủ điều kiện tự duyệt.</p>
+    <p class="muted small">Đánh giá theo thứ tự từ trên xuống. Một phiếu bị <b>chặn</b> nếu có bất kỳ rule chặn nào; nếu không, phiếu <b>có điểm cần chú ý</b> nếu có rule chuyển xem/tới hạn. Đây chỉ là đề xuất: mọi phiếu đều do bác sĩ đọc và ký.</p>
     ${groups.map((g, gi) => `<section class="rule-group"><h3 class="section-h"><span class="step">${gi + 1}</span>${esc(g.name)}</h3>
       ${g.rules.map(r => { const dsc = describeRule(r, { catalog, discipline: rulesTab, models: meta.models });
         return `<article class="rule-card"><header><div><span class="code">${esc(r.code)}</span><h4>${esc(r.name)}</h4></div>${outcomeBadge(r.onFail)}</header>

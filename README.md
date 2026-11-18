@@ -2,11 +2,15 @@
 
 **Tất cả dữ liệu là giả lập. Không kết nối LIS, không ký số, không phát hành kết quả thật. Mọi ngưỡng, rule và mô hình là cấu hình minh họa, chưa được khoa xét nghiệm phê duyệt hay thẩm định. Không dùng cho người bệnh.**
 
-Prototype mô phỏng bước kiểm tra kết quả sau khi máy gửi lên LIS, trước khi ký trả:
+Prototype hỗ trợ bác sĩ duyệt kết quả sau khi máy gửi lên LIS. **Hệ thống chỉ đề xuất. Bác sĩ quyết định và ký; hệ thống không tự ký.**
 
 ```
-máy → LIS → [kiểm tra trước trả: dữ liệu → QC → cờ máy → mẫu → giới hạn/tới hạn → lịch sử → nhất quán → mô hình]
-          → AUTO_APPROVE_ELIGIBLE (mô phỏng ký, chờ ACK)  |  MANUAL_REVIEW (người phụ trách, có lý do)  |  BLOCKED (nêu điều kiện cần xử lý)
+máy → LIS → hệ thống đọc phiếu [dữ liệu → QC → cờ máy → mẫu → giới hạn/tới hạn → lịch sử → nhất quán → mô hình]
+          → đề xuất: Không thấy bất thường | Có điểm cần chú ý | Chưa nên ký   (tô màu dòng có vấn đề + lý do)
+          → bác sĩ đọc, bấm: Ký | Cần xem xét lại | Yêu cầu chạy lại mẫu
+          → Ký: phiếu vào hàng đợi ký (FIFO, chạy ngầm), lần lượt gửi sang hệ thống ký của bệnh viện (~10–15 s/phiếu, mô phỏng);
+                bác sĩ sang phiếu tiếp theo ngay, không chờ
+          → ký lỗi: phiếu quay lại đầu danh sách "Chờ duyệt" + thông báo (chuông, toast, thông báo trình duyệt)
 ```
 
 ## Chạy trên máy
@@ -44,10 +48,10 @@ Lưu ý trên Windows của máy phát triển:
 
 | Tab | Nội dung |
 |---|---|
-| **Hàng đợi duyệt** | 110 phiếu của ngày mô phỏng 16/11/2026, trong đó có 17 phiếu kịch bản trong hàng đợi và các phiếu tập test. Bộ dữ liệu có tổng cộng 36 phiếu mang split `scenario`; đây không phải số phiếu kịch bản trong hàng đợi hôm nay. Phiếu được sắp theo mức ưu tiên (tới hạn → bị chặn → cần xem xét). Phần chi tiết gồm: kết quả, đơn vị, khoảng tham chiếu, giới hạn tự duyệt, lịch sử có thời điểm, bối cảnh không định danh, HIL, cờ máy và sự kiện QC. Phần **giải thích quyết định** đi theo từng bước, mỗi rule có trạng thái Đạt / Không đạt / Không đánh giá được (thiếu dữ liệu) / Không áp dụng. Mỗi điểm mô hình kèm **mức phủ dữ liệu** ("dùng 7/12 chỉ số", nêu chỉ số nào không chỉ định / chưa có kết quả), trạng thái lịch sử và **giải thích theo từng phiếu** (đặc trưng đóng góp nhiều nhất). |
-| | Thao tác: *duyệt & ký mô phỏng*, *giữ lại*, *yêu cầu kiểm tra bổ sung*, *ghi nhận đã thông báo tới hạn*, mỗi thao tác cần mã lý do và ghi chú. *Cập nhật kết quả* (chạy lại / sửa đơn vị / lấy mẫu mới) tạo phiên bản mới, làm đánh giá cũ hết hiệu lực và đánh giá lại. |
-| | Ký/gửi: gửi tới "hệ thống tiếp nhận" giả lập. Chỉ hiện "đã ký/đã gửi" khi có ACK. Có idempotency key theo phiên bản, chặn gửi trùng, khoảng 10% lần gửi lỗi để thử gửi lại, và ACK của phiên bản cũ không xác nhận phiên bản mới. |
-| | Chế độ: *Chạy ngầm* (chỉ đề xuất) hoặc *Tự ký mô phỏng*. Bật/tắt lớp mô hình. Có thể hiện nhãn ground truth giả lập để đào tạo. |
+| **Duyệt kết quả** | 110 phiếu của ngày mô phỏng 16/11/2026, trong đó có 17 phiếu kịch bản trong hàng đợi và các phiếu tập test. Bộ dữ liệu có tổng cộng 36 phiếu mang split `scenario`; đây không phải số phiếu kịch bản trong hàng đợi hôm nay. Danh sách chia tab *Chờ duyệt* (phiếu ký lỗi luôn ở đầu), *Xem lại*, *Chạy lại*, *Đang ký*, *Đã ký*; trong mỗi tab sắp theo ưu tiên (tới hạn → chưa nên ký → cần chú ý). Phiếu hiển thị như phiếu kết quả thông thường: bảng gọn (không kẻ dọc), cờ H/L, đơn vị, khoảng tham chiếu, lần trước. Dòng hệ thống thấy có vấn đề được **tô màu và có chú thích lý do ngay dưới dòng**; vấn đề chung của phiếu (QC, HIL, mô hình…) nằm trong ô *Hệ thống đề xuất* ngay dưới bảng, trên thanh nút. Cột danh sách phiếu kéo được để đổi độ rộng hoặc thu gọn. Bối cảnh (kể cả mô tả kịch bản demo), mẫu, các bước kiểm tra và mô hình nằm trong phần thu gọn. Phần **chi tiết các bước kiểm tra** đi theo từng bước, mỗi rule có trạng thái Đạt / Không đạt / Không đánh giá được (thiếu dữ liệu) / Không áp dụng. Mỗi điểm mô hình kèm **mức phủ dữ liệu** ("dùng 7/12 chỉ số", nêu chỉ số nào không chỉ định / chưa có kết quả), trạng thái lịch sử và **giải thích theo từng phiếu** (đặc trưng đóng góp nhiều nhất). |
+| | Thanh nút cuối phiếu: **Ký**, **Cần xem xét lại** (lý do/ghi chú tùy chọn), **Yêu cầu chạy lại mẫu** (chọn xét nghiệm, mặc định chọn sẵn các chỉ số bị tô màu). Sau mỗi thao tác app tự chuyển sang phiếu tiếp theo. Phiếu có giá trị tới hạn: phải tick "Đã thông báo giá trị tới hạn cho lâm sàng" mới ký được. Phiếu *Chưa nên ký* (thiếu kết quả, sai đơn vị, QC không đạt, cờ chặn…) không ký được, cần chạy lại/xử lý. *Nhận kết quả chạy lại* (mô phỏng máy gửi lên) tạo phiên bản mới; hệ thống đọc lại và phiếu quay về *Chờ duyệt*. |
+| | Hàng đợi ký: FIFO, mỗi lần một phiếu, mỗi phiếu 10–15 s (mô phỏng), khoảng 10% lỗi (timeout, HTTP 503, chưa mở khóa chứng thư). Chỉ hiện "Đã ký" khi hệ thống bệnh viện xác nhận. Phiếu còn chờ trong hàng có thể *rút lệnh ký*; phiếu đang gửi thì không. Idempotency key theo phiên bản, chặn ký trùng; có phiên bản mới thì lệnh ký của phiên bản cũ bị bỏ. Phiếu ký lỗi quay lại đầu *Chờ duyệt*, có thông báo (chuông trên thanh trên cùng, toast, và thông báo trình duyệt nếu được cho phép), bấm *Ký lại*. Khởi động lại máy chủ: phiếu đang chờ tiếp tục theo thứ tự; phiếu đang gửi dở được coi là lỗi (chưa xác nhận) để bác sĩ ký lại. |
+| | Cài đặt: ngưỡng chung/cá nhân, bật/tắt lớp mô hình, hiện nhãn ground truth giả lập để đào tạo. Không còn chế độ tự ký. |
 | **Nhập thử kết quả** | Bác sĩ tự nhập giá trị, đơn vị, HIL, cờ máy, trạng thái QC và giá trị lần trước để xem hệ thống quyết định. Ô trống nghĩa là "chưa có kết quả", không bị coi là 0. Phần nhập thử không ghi vào hàng đợi. |
 | **Đánh giá mô hình** | Một nơi duy nhất, đọc `reports/evaluation-comparison.json`: (1) *chỉ rule* so với *rule + mô hình đang dùng* trên tập test của bộ demo (dữ liệu độc lập với bộ huấn luyện), kèm mẫu số, Wilson 95%, phát hiện theo loại lỗi, ngưỡng cá nhân, và số lần mỗi mô hình chấm điểm / không đánh giá được; (2) tóm tắt benchmark ngoại tuyến (`reports/benchmark.json`): LR so với XGBoost so với LightGBM, mô hình bất thường cho người khám lần đầu, chính sách người khám lần đầu. Dữ liệu giả lập đã làm giàu tỷ lệ lỗi; không phải hiệu năng lâm sàng. |
 | **Phản hồi** | Mỗi thao tác của người phụ trách được lưu thành một bản ghi gồm quyết định hệ thống, phiên bản rule/mô hình, mã băm đầu vào, hành động, lý do và kết quả xác minh. Trạng thái nhãn mặc định là `CHƯA RÀ SOÁT`. Có xuất CSV. **Phản hồi không làm thay đổi rule đang chạy.** |
@@ -56,7 +60,7 @@ Lưu ý trên Windows của máy phát triển:
 
 ### Kịch bản demo trong hàng đợi (mục 8 của PROJECT CONTEXT, cộng thêm KB8)
 
-| Mã | Tình huống | Quyết định |
+| Mã | Tình huống | Đề xuất của hệ thống (mã engine) |
 |---|---|---|
 | KB1 | Đầy đủ, ổn định, QC đạt | AUTO_APPROVE_ELIGIBLE |
 | KB2 | Glucose 11,7 ngoài tham chiếu nhưng ổn định theo lịch sử (bệnh nền chỉ hiển thị, không tự cho qua) | AUTO_APPROVE_ELIGIBLE |
@@ -187,17 +191,19 @@ Hướng thiết kế do Codex tìm trên web (NHS Design System — Colour/Deta
 ## Giả định đang dùng
 
 1. **Đơn vị ký là cả phiếu.** Chỉ cần một chỉ số bị chặn hoặc cần xem thì cả phiếu bị giữ, không ký từng phần. Hóa sinh và CBC là hai phiếu riêng.
-2. **Giá trị tới hạn:** không tự ký. Phiếu chuyển người phụ trách với mức ưu tiên cao nhất, và phải ghi nhận "đã thông báo lâm sàng" trước khi duyệt. Đây là chính sách giả lập.
-3. **QC:** dùng lần QC gần nhất *trước thời điểm đo* của đúng cặp máy–xét nghiệm, trong vòng 24 giờ. QC đạt buổi sáng không che được lần QC hỏng sau đó.
-4. **Mô hình chỉ được nâng một phiếu lên MANUAL_REVIEW.** Mô hình không thể vượt qua điều kiện chặn hay tự duyệt. Điểm mô hình là điểm phát hiện, không phải xác suất an toàn.
-5. **Học từ phản hồi:** chỉ ngoại tuyến. Phản hồi được rà soát nhãn, sau đó huấn luyện lại, đánh giá độc lập, rồi mới phê duyệt phiên bản mới.
+2. **Hệ thống không tự ký.** Mọi phiếu do bác sĩ ký. Mã AUTO_APPROVE_ELIGIBLE trong engine và báo cáo đánh giá chỉ có nghĩa "không thấy bất thường"; mã này dùng để đo hiệu năng, không dùng để ký.
+3. **Giá trị tới hạn:** đứng đầu danh sách; khi ký, bác sĩ phải xác nhận "đã thông báo lâm sàng". Đây là chính sách giả lập.
+4. **Phiếu "Chưa nên ký"** (lỗi dữ liệu/QC/mẫu) không ký được trên giao diện; cần chạy lại hoặc xử lý để có phiên bản mới. Đây là lựa chọn an toàn của prototype, khoa có thể đổi.
+5. **QC:** dùng lần QC gần nhất *trước thời điểm đo* của đúng cặp máy–xét nghiệm, trong vòng 24 giờ. QC đạt buổi sáng không che được lần QC hỏng sau đó.
+6. **Mô hình chỉ được nâng một phiếu lên MANUAL_REVIEW.** Mô hình không thể vượt qua điều kiện chặn hay tự duyệt. Điểm mô hình là điểm phát hiện, không phải xác suất an toàn.
+7. **Học từ phản hồi:** chỉ ngoại tuyến. Phản hồi được rà soát nhãn, sau đó huấn luyện lại, đánh giá độc lập, rồi mới phê duyệt phiên bản mới.
 
 ## Chưa xác minh trước khi tích hợp thật
 
 Xem [docs/OPEN_QUESTIONS.md](docs/OPEN_QUESTIONS.md). Các điểm chính:
 - Schema và giao thức LIS (HL7/ASTM). Khả năng xuất cờ máy, HIL, số lô.
 - Ngưỡng do khoa phê duyệt.
-- Phương thức ký và trách nhiệm pháp lý với kết quả tự ký.
+- API ký số của hệ thống bệnh viện: thời gian ký, mã lỗi, có truy vấn trạng thái/idempotency không; cách mở khóa chứng thư của bác sĩ.
 - Nơi xử lý dữ liệu.
 - Hiệu năng trên dữ liệu thật (cần chạy ngầm dài hạn theo CLSI AUTO10/AUTO15).
 
