@@ -1,5 +1,5 @@
 {
- "generatedAt": "2026-11-17T16:48:55",
+ "generatedAt": "2026-11-18T11:38:31",
  "disclaimer": "Mọi con số chỉ đúng trên dữ liệu GIẢ LẬP (tỷ lệ lỗi làm giàu ≈10–50× thực tế, lỗi do chính generator tiêm vào). Không phản ánh hiệu năng trên dữ liệu thật; không dùng làm tiêu chí nghiệm thu.",
  "data": {
   "features": "data/synthetic/bench/features.jsonl",
@@ -34279,5 +34279,5 @@
    }
   }
  },
- "runtimeSeconds": 1281.6
+ "runtimeSeconds": 1757.4
 }

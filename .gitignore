@@ -11,3 +11,16 @@ private-data/
 data/synthetic/
 data/runtime/
 __pycache__/
+
+# Video exports and recordings (keep large media out of Git)
+*.mp4
+*.webm
+*.mov
+*.avi
+*.mkv
+*.m4v
+*.wmv
+*.mpeg
+*.mpg
+*.3gp
+*.ogv

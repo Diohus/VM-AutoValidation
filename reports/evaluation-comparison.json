@@ -1,7 +1,7 @@
 {
- "generatedAt": "2026-11-17T09:50:26.221Z",
+ "generatedAt": "2026-11-18T04:40:56.132Z",
  "seed": 20261116,
- "fingerprint": "7b2b65f3a8856710",
+ "fingerprint": "6b0bd1401e5fd6dc",
  "disclaimer": "Dữ liệu GIẢ LẬP, tỷ lệ lỗi làm giàu. Không phản ánh hiệu năng thật, không dùng làm tiêu chí nghiệm thu.",
  "endToEndNote": "Tập test của bộ dữ liệu demo (seed 20261116). Mô hình được huấn luyện trên bộ benchmark khác (seed 20261117), nên đây là kiểm tra trên dữ liệu độc lập.",
  "models": [
