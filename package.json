@@ -1,18 +1,21 @@
 {
-  "name": "vm-autovalidation-demo",
+  "name": "labreview-demo",
   "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Synthetic laboratory pre-release autoverification prototype (rules + per-error ML detectors). Not for clinical use.",
   "scripts": {
     "generate": "node scripts/generate-data.mjs",
-    "train": "node scripts/train.mjs",
-    "train:xgb": "node scripts/train-xgb.mjs && node scripts/evaluate-comparison.mjs",
-    "setup": "node scripts/generate-data.mjs && node scripts/train.mjs && node scripts/train-xgb.mjs && node scripts/evaluate-comparison.mjs",
+    "train": ".venv\\Scripts\\python ml/train_runtime.py && node scripts/evaluate-comparison.mjs",
+    "evaluate": "node scripts/evaluate-comparison.mjs",
+    "setup": "node scripts/generate-data.mjs && node scripts/evaluate-comparison.mjs",
     "diagnose": "node scripts/diagnose.mjs",
+    "bench:data": "node scripts/generate-data.mjs --subjects=10000 --seed=20261117 --out=data/synthetic/bench --today=false && node scripts/export-features.mjs --dataset=data/synthetic/bench/dataset.json --out=data/synthetic/bench/features.jsonl",
+    "bench": ".venv\\Scripts\\python ml/benchmark.py && .venv\\Scripts\\python ml/summarize.py",
+    "bench:test": ".venv\\Scripts\\python -m unittest ml/test_benchmark.py",
     "start": "node server/server.mjs",
     "test": "node --test \"tests/*.test.js\"",
-    "check": "node --check server/server.mjs && node --check public/app.js && node --check scripts/generate-data.mjs && node --check scripts/train.mjs"
+    "check": "node --check server/server.mjs && node --check public/app.js && node --check scripts/generate-data.mjs && node --check scripts/evaluate-comparison.mjs && node --check scripts/export-features.mjs && node --check scripts/diagnose.mjs"
   },
   "engines": { "node": ">=22" }
 }

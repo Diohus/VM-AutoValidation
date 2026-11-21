@@ -1,6 +1,6 @@
 {
   "rulesetId": "CHEM-AV",
-  "version": "chem-demo-1.0.0",
+  "version": "chem-demo-1.4.0",
   "discipline": "CHEM",
   "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
   "approvedBy": null,
@@ -191,7 +191,8 @@
           "NA",
           "CA"
         ],
-        "windowDays": 365
+        "windowDays": 365,
+        "firstVisitAbnormalPolicy": "ALWAYS_REVIEW"
       }
     },
     {
@@ -280,17 +281,18 @@
         "dilutionPct": 10
       }
     },
+    
     {
       "code": "CHEM-M01",
       "type": "model_score",
       "stage": "MODEL",
       "priority": 80,
       "onFail": "REVIEW",
-      "onNotEvaluable": "IGNORE",
+      "onNotEvaluable": "REVIEW",
       "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
-      "reason": "Độ lệch đa chỉ số so với lịch sử bất thường so với biến thiên trong cá thể. Mô hình chỉ có quyền chuyển MANUAL_REVIEW; không vượt qua điều kiện chặn hay tự duyệt thay rule.",
+      "reason": "Độ lệch đa chỉ số so với lần trước bất thường so với biến thiên trong cá thể (XGBoost, cấu hình PR #2). Chỉ chạy khi có lịch sử ≤90 ngày; không có lịch sử → không áp dụng (không thay cho rule). Chỉ có quyền chuyển MANUAL_REVIEW.",
       "params": {
-        "model": "chem_wbit_xgb"
+        "model": "chem_wbit"
       }
     },
     {
@@ -299,11 +301,27 @@
       "stage": "MODEL",
       "priority": 81,
       "onFail": "REVIEW",
-      "onNotEvaluable": "IGNORE",
-      "name": "Mô hình phát hiện nhiễm mẫu (EDTA / dịch truyền) — chỉ được giữ thêm",
-      "reason": "Tổ hợp chỉ số gợi ý nhiễm EDTA hoặc lẫn dịch truyền. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "onNotEvaluable": "REVIEW",
+      "name": "Mô hình phát hiện lẫn dịch truyền (NaCl 0,9% / glucose 5%) — chỉ được giữ thêm",
+      "reason": "XGBoost (cấu hình PR #2) trên tổ hợp chỉ số (Na − Cl, glucose, mức pha loãng so với lần trước khi có). Cần Na, Cl, glucose; thiếu → không đánh giá được. Chỉ có quyền chuyển MANUAL_REVIEW. Nhiễm EDTA do rule CHEM-X01 đảm nhận (không dùng mô hình).",
       "params": {
-        "model": "chem_contam_xgb"
+        "model": "chem_ivfluid"
+      }
+    },
+    {
+      "code": "CHEM-M03",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 82,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "REVIEW",
+      "name": "Phát hiện bất thường đa chỉ số — người khám lần đầu (KNN) — chỉ được giữ thêm",
+      "reason": "Chỉ chạy khi không có lịch sử ≤90 ngày. Khoảng cách tới các phiếu thường quy gần nhất (theo Farrell 2024), ngưỡng gắn cờ 5%. Nhắm tới nhiễm mẫu và lỗi phân tích; bệnh thật cũng có thể bị gắn cờ. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "params": {
+        "modelByPanel": {
+          "CHEM_BASIC": "fv_chem_basic",
+          "CHEM_EXT": "fv_chem_ext"
+        }
       }
     }
   ]

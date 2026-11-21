@@ -1,7 +1,7 @@
 // Synthetic LIS dataset generator. ALL DATA IS SYNTHETIC. Parameters are illustrative, not clinical.
 // Layers: individual set-point → time-varying biology/disease (AR(1) within-subject variation, CVi)
 //         → analytical error (CVa) → injected, labelled pre-analytical/analytical/data errors.
-// Splits are assigned per subject BEFORE error injection; WBIT swap partners share a split.
+// Splits are assigned per subject BEFORE error injection; WBIT swap partners share a split (same split, panel, ≤3 h).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createRng, hashString } from '../src/core/rng.js';
@@ -13,6 +13,8 @@ const A = catalog.analytes;
 const args = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')));
 const SEED = Number(args.seed ?? 20261116);
 const N_SUBJECTS = Number(args.subjects ?? 3000);
+const OUT_DIR = args.out ? (args.out.endsWith('/') ? args.out : args.out + '/') : 'data/synthetic/';
+const WITH_TODAY = args.today !== 'false'; // demo worklist visits for "today" (runtime dataset only)
 const START = Date.parse('2026-03-01T00:00:00+07:00');
 const TODAY = '2026-11-16';
 const TODAY_T = Date.parse(`${TODAY}T00:00:00+07:00`);
@@ -21,10 +23,10 @@ const DAY = 86400000, HOUR = 3600000, MIN = 60000;
 const rng = createRng(SEED);
 
 // Error rates are deliberately ENRICHED (≈10–50× real-world) so the models see enough positives.
-// Real-world prevalence is handled at evaluation time by re-weighting (see scripts/train.mjs).
+// Real-world prevalence is handled at evaluation time (PPV at assumed prevalences, see ml/benchmark.py).
 const RATES = {
-  CHEM: { wbit: 0.03, edta: 0.01, saline_opd: 0.004, saline_ipd: 0.03, d5w_ipd: 0.012, short_sample: 0.003, unit: 0.003, missing: 0.008, delayed: 0.012, hil_missing: 0.006 },
-  HEME: { wbit: 0.03, plt_clump: 0.02, clot: 0.003, missing: 0.005, delayed: 0.006, variant_lymph: 0.02 }
+  CHEM: { wbit: 0.03, analytical_single: 0.01, edta: 0.01, saline_opd: 0.004, saline_ipd: 0.03, d5w_ipd: 0.012, short_sample: 0.003, unit: 0.003, missing: 0.008, delayed: 0.012, hil_missing: 0.006 },
+  HEME: { wbit: 0.03, analytical_single: 0.01, plt_clump: 0.02, clot: 0.003, missing: 0.005, delayed: 0.006, variant_lymph: 0.02 }
 };
 
 // ---------- time helpers (ISO with +07:00) ----------
@@ -51,8 +53,12 @@ const CONDITION_LABELS = {
 };
 const MED_LABELS = { INSULIN: 'Bắt đầu insulin', METFORMIN: 'Metformin', DIURETIC: 'Lợi tiểu thiazide', IRON: 'Bổ sung sắt' };
 
+// Pseudonymous tokens must be unique: a collision would merge two simulated people's histories (Codex round 2).
+const usedTokens = new Set();
 function makeSubject(i) {
-  const token = `SBJ-${hex(6)}`;
+  let token;
+  do token = `SBJ-${hex(6)}`; while (usedTokens.has(token));
+  usedTokens.add(token);
   const sex = rng.chance(0.52) ? 'F' : 'M';
   const age = Math.round(Math.min(92, Math.max(18, 25 + rng.next() * 45 + rng.normal() * 12)));
   const conditions = [], medications = [];
@@ -234,7 +240,7 @@ function newReport(s, panelCode, collectedT, visit, { ward }) {
     context: contextFor(s, collectedT, visit),
     split: s.split,
     _t: measuredT,
-    truth: { sampleError: null, dataIssue: null, criticalValue: false, pathologyFlag: null, requiresReview: false, details: null }
+    truth: { sampleError: null, errors: [], dataIssue: null, criticalValue: false, pathologyFlag: null, requiresReview: false, details: null }
   };
 }
 
@@ -243,6 +249,40 @@ function fillResults(r, measured) {
     test: t, status: 'RESULTED', value: round(t, measured[t]), unit: A[t].unit,
     instrument: A[t].instrument, measuredAt: iso(r._t), run: 1, flags: []
   }));
+}
+
+// Every injected error is recorded in truth.errors (multi-label); truth.sampleError keeps the first (primary) one.
+function markError(r, code, details) {
+  if (!r.truth.errors.includes(code)) r.truth.errors.push(code);
+  if (!r.truth.sampleError) { r.truth.sampleError = code; r.truth.details = details; }
+}
+
+// Analytes never hit by analytical_single in train/val: test-only, to check generalisation beyond the injected pattern.
+export const ANALYTICAL_HOLDOUT = ['ALT', 'MG', 'PLT', 'RDW'];
+
+// Single-analyte analytical error (Farrell 2024 style): one analyte off by 8–60% with no instrument flag and passing QC
+// (e.g. bubble / partial probe clog). Percent-type analytes (NEU, LYM) get an additive shift instead.
+// On the haematology analyser HCT, MCH and MCHC are CALCULATED (HCT = RBC×MCV, MCH = HGB/RBC, MCHC = HGB/HCT):
+// a single-channel error hits a measured parameter and propagates to the calculated ones, never the reverse.
+const HEME_CALCULATED = ['HCT', 'MCH', 'MCHC'];
+function applyAnalyticalSingle(r) {
+  const pool = r.results.filter(x => typeof x.value === 'number' && !HEME_CALCULATED.includes(x.test)
+    && (r.split === 'test' || !ANALYTICAL_HOLDOUT.includes(x.test)));
+  if (!pool.length) return;
+  const x = rng.pick(pool);
+  const mag = rng.uniform(0.08, 0.6), dir = rng.chance(0.5) ? 1 : -1;
+  const pct = ['NEU', 'LYM'].includes(x.test);
+  const before = x.value;
+  x.value = round(x.test, Math.max(0, pct ? x.value + dir * mag * 40 : x.value * (1 + dir * mag)));
+  if (r.discipline === 'HEME' && ['RBC', 'HGB', 'MCV'].includes(x.test)) {
+    const g = t => r.results.find(q => q.test === t);
+    const ok = t => typeof g(t)?.value === 'number';
+    if (ok('RBC') && ok('MCV') && ok('HCT') && x.test !== 'HGB') g('HCT').value = round('HCT', g('RBC').value * g('MCV').value / 1000);
+    if (ok('HGB') && ok('RBC') && ok('MCH') && x.test !== 'MCV') g('MCH').value = round('MCH', g('RBC').value > 0 ? g('HGB').value / g('RBC').value : 0);
+    if (ok('HGB') && ok('HCT') && ok('MCHC')) g('MCHC').value = round('MCHC', g('HCT').value > 0 ? g('HGB').value / g('HCT').value : 0);
+  }
+  r.truth.analytical = { test: x.test, magnitude: Number(mag.toFixed(3)), direction: dir, before, after: x.value, holdoutAnalyte: ANALYTICAL_HOLDOUT.includes(x.test) };
+  markError(r, 'analytical_single', `Lỗi phân tích đơn chỉ số mô phỏng: ${x.test} ${dir > 0 ? '+' : '−'}${(mag * 100).toFixed(0)}%${pct ? ' (điểm ×40)' : ''}`);
 }
 
 function applyErrors(r, s) {
@@ -263,23 +303,23 @@ function applyErrors(r, s) {
       if (has('CA')) set('CA', v.CA * (1 - 0.1 - 0.55 * sev));
       if (has('MG')) set('MG', v.MG * (1 - 0.05 - 0.4 * sev));
       if (has('ALP')) set('ALP', v.ALP * (1 - 0.1 - 0.5 * sev));
-      r.truth.sampleError = 'edta'; r.truth.details = `Nhiễm EDTA mô phỏng, mức ${sev.toFixed(2)}`;
+      markError(r, 'edta', `Nhiễm EDTA mô phỏng, mức ${sev.toFixed(2)}`);
     } else if (chosen === 'saline' || chosen === 'd5w') {
       const f = chosen === 'saline' ? rng.uniform(0.06, 0.4) : rng.uniform(0.04, 0.3);
       const fluid = chosen === 'saline' ? { NA: 154, CL: 154 } : { GLU: 278 };
       for (const t of Object.keys(v)) set(t, (1 - f) * v[t] + f * (fluid[t] ?? 0));
-      r.truth.sampleError = chosen; r.truth.details = `Lẫn ${chosen === 'saline' ? 'NaCl 0,9%' : 'glucose 5%'} mô phỏng, tỷ lệ ${(f * 100).toFixed(0)}%`;
+      markError(r, chosen, `Lẫn ${chosen === 'saline' ? 'NaCl 0,9%' : 'glucose 5%'} mô phỏng, tỷ lệ ${(f * 100).toFixed(0)}%`);
       r.context.ivInfusion = rng.chance(0.6) ? 'YES' : 'UNKNOWN';
     } else if (chosen === 'short_sample') {
       for (const t of Object.keys(v)) set(t, v[t] * rng.uniform(0.75, 0.95));
       r.instrumentFlags.push({ code: 'SAMPLE_SHORT', source: 'COBAS_C303' });
-      r.truth.sampleError = 'short_sample'; r.truth.details = 'Thiếu thể tích mẫu (máy gắn cờ)';
+      markError(r, 'short_sample', 'Thiếu thể tích mẫu (máy gắn cờ)');
     } else if (chosen === 'delayed') {
       const hrs = rng.uniform(5, 11);
       r._t = Date.parse(r.specimen.collectedAt) + hrs * HOUR;
       r.results.forEach(x => x.measuredAt = iso(r._t));
       set('K', v.K + 0.08 * (hrs - 3)); set('GLU', v.GLU * (1 - 0.05 * (hrs - 2)));
-      r.truth.sampleError = 'delayed'; r.truth.details = `Mẫu chậm xử lý ${hrs.toFixed(1)} giờ (mô phỏng)`;
+      markError(r, 'delayed', `Mẫu chậm xử lý ${hrs.toFixed(1)} giờ (mô phỏng)`);
     }
     // hemolysis (independent of above)
     const hil = r.specimen.hil;
@@ -288,7 +328,7 @@ function applyErrors(r, s) {
       const H = hil.H;
       const cur = Object.fromEntries(r.results.map(x => [x.test, x.value]));
       set('K', cur.K + 0.003 * H); if (has('AST')) set('AST', cur.AST + 0.12 * H); if (has('ALT')) set('ALT', cur.ALT + 0.01 * H); if (has('MG')) set('MG', cur.MG + 0.0005 * H);
-      if (H > 90 && !r.truth.sampleError) { r.truth.sampleError = 'hemolysis'; r.truth.details = `Tan máu mô phỏng, H=${H}`; }
+      if (H > 90) markError(r, 'hemolysis', `Tan máu mô phỏng, H=${H}`);
     }
     if (rng.chance(rates.hil_missing)) { r.specimen.hil = null; r.truth.dataIssue = r.truth.dataIssue ?? 'hil_missing'; }
     if (rng.chance(rates.unit)) {
@@ -303,19 +343,20 @@ function applyErrors(r, s) {
     if (u < rates.plt_clump) {
       set('PLT', v.PLT * rng.uniform(0.25, 0.7));
       if (rng.chance(0.85)) r.instrumentFlags.push({ code: 'PLT_CLUMPS', source: 'DXH_690T' });
-      r.truth.sampleError = 'plt_clump'; r.truth.details = 'Tiểu cầu kết cụm mô phỏng';
+      markError(r, 'plt_clump', 'Tiểu cầu kết cụm mô phỏng');
     } else if (u < rates.plt_clump + rates.clot) {
       set('PLT', v.PLT * rng.uniform(0.3, 0.7)); set('WBC', v.WBC * rng.uniform(0.8, 0.95));
       r.instrumentFlags.push({ code: 'CLOT_DETECTED', source: 'DXH_690T' });
-      r.truth.sampleError = 'clot'; r.truth.details = 'Mẫu có cục đông (máy gắn cờ)';
+      markError(r, 'clot', 'Mẫu có cục đông (máy gắn cờ)');
     } else if (u < rates.plt_clump + rates.clot + rates.delayed) {
       const hrs = rng.uniform(26, 40);
       r._t = Date.parse(r.specimen.collectedAt) + hrs * HOUR; r.results.forEach(x => x.measuredAt = iso(r._t));
       set('MCV', v.MCV * 1.04); set('HCT', v.HCT * 1.04); set('MCHC', v.MCHC * 0.96);
-      r.truth.sampleError = 'delayed'; r.truth.details = `Mẫu EDTA để ${hrs.toFixed(0)} giờ`;
+      markError(r, 'delayed', `Mẫu EDTA để ${hrs.toFixed(0)} giờ`);
     }
     if (rng.chance(rates.variant_lymph)) { r.instrumentFlags.push({ code: 'VARIANT_LYMPH', source: 'DXH_690T' }); r.truth.pathologyFlag = 'VARIANT_LYMPH'; }
   }
+  if (rng.chance(rates.analytical_single)) applyAnalyticalSingle(r);
   if (rng.chance(rates.missing)) {
     const res = rng.pick(r.results);
     res.status = rng.pick(['PENDING', 'TRANSMISSION_ERROR', 'FAILED']); res.value = null;
@@ -326,7 +367,7 @@ function applyErrors(r, s) {
 function applyQcBias(r) {
   for (const x of r.results) {
     const w = inQcFail(x.instrument, x.test, Date.parse(x.measuredAt));
-    if (w && typeof x.value === 'number') { x.value = round(x.test, x.value * w.bias); r.truth.sampleError = r.truth.sampleError ?? 'qc_window'; r.truth.details = r.truth.details ?? `Đo trong khoảng QC không đạt (${x.test})`; }
+    if (w && typeof x.value === 'number') { x.value = round(x.test, x.value * w.bias); markError(r, 'qc_window', `Đo trong khoảng QC không đạt (${x.test})`); }
   }
 }
 
@@ -347,16 +388,17 @@ function finalizeTruth(r) {
   const t = r.truth;
   t.requiresReview = !!(t.sampleError || t.dataIssue || t.criticalValue || t.pathologyFlag);
   // Simulated reviewer: "reviewer approved" ≠ "result was correct".
-  const pHold = t.sampleError ? ({ wbit: 0.55, edta: 0.85, saline: 0.7, d5w: 0.8, hemolysis: 0.95, qc_window: 0.97, delayed: 0.6, plt_clump: 0.9, clot: 0.97, short_sample: 0.97 }[t.sampleError] ?? 0.8)
+  const pHold = t.sampleError ? ({ wbit: 0.55, analytical_single: 0.5, edta: 0.85, saline: 0.7, d5w: 0.8, hemolysis: 0.95, qc_window: 0.97, delayed: 0.6, plt_clump: 0.9, clot: 0.97, short_sample: 0.97 }[t.sampleError] ?? 0.8)
     : t.dataIssue ? 0.99 : t.criticalValue ? 0.97 : t.pathologyFlag ? 0.9 : 0.05;
   r.reviewer = { action: rng.chance(pHold) ? 'HOLD' : 'APPROVE', simulated: true };
 }
 
 // ---------- WBIT swaps (within split, same panel, collected within ±3h, different subjects) ----------
+// Restored 17/11/2026 (user decision). Only error-free, data-clean reports take part, as in the original simulation.
 function injectWbit(reports) {
   const groups = new Map();
   for (const r of reports) {
-    if (r.split === 'scenario' || r.truth.sampleError || r.truth.dataIssue) continue;
+    if (r.split === 'scenario' || r.truth.errors.length || r.truth.dataIssue) continue;
     const key = `${r.split}|${r.panel}|${r.specimen.collectedAt.slice(0, 10)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(r);
@@ -365,15 +407,15 @@ function injectWbit(reports) {
   for (const arr of groups.values()) {
     for (let i = 0; i < arr.length; i++) {
       const a = arr[i];
-      if (a.truth.sampleError || !rng.chance(RATES[a.discipline].wbit)) continue;
+      if (a.truth.errors.length || !rng.chance(RATES[a.discipline].wbit)) continue;
       const ta = Date.parse(a.specimen.collectedAt);
-      const cands = arr.filter(b => b !== a && !b.truth.sampleError && b.subjectToken !== a.subjectToken && Math.abs(Date.parse(b.specimen.collectedAt) - ta) <= 3 * HOUR);
+      const cands = arr.filter(b => b !== a && !b.truth.errors.length && b.subjectToken !== a.subjectToken && Math.abs(Date.parse(b.specimen.collectedAt) - ta) <= 3 * HOUR);
       if (!cands.length) continue;
       const b = rng.pick(cands);
       // a's tube actually contains b's blood: a receives b's measured values (one-directional WBIT).
       const bv = Object.fromEntries(b.results.map(x => [x.test, x.value]));
       a.results.forEach(x => { if (x.test in bv && typeof x.value === 'number' && typeof bv[x.test] === 'number') x.value = bv[x.test]; });
-      a.truth.sampleError = 'wbit'; a.truth.details = 'Nhầm mẫu (WBIT) mô phỏng: ống chứa máu của người bệnh khác cùng khung giờ';
+      markError(a, 'wbit', 'Nhầm mẫu (WBIT) mô phỏng: ống chứa máu của người bệnh khác cùng khung giờ');
       n++;
     }
   }
@@ -402,12 +444,13 @@ function simulate() {
   }
   // Today's worklist: test-split subjects (never seen in training) get a morning visit.
   const testSubjects = subjects.filter(s => s.split === 'test');
-  for (const s of testSubjects) if (rng.chance(0.09)) visits.push({ s, t: TODAY_T + rng.int(7 * 60, 10 * 60 + 30) * MIN, ward: 'OPD', today: true });
+  if (WITH_TODAY) for (const s of testSubjects) if (rng.chance(0.09)) visits.push({ s, t: TODAY_T + rng.int(7 * 60, 10 * 60 + 30) * MIN, ward: 'OPD', today: true });
+  // Fix OPD clock times BEFORE ordering visits, so the AR(1) biology is always advanced forward in time.
+  for (const v of visits) if (v.ward === 'OPD' && !v.today) v.t = dayStart(v.t) + rng.int(7 * 60, 11 * 60) * MIN;
   visits.sort((a, b) => a.t - b.t);
   for (const vis of visits) {
     const { s, ward } = vis;
-    let t = vis.t;
-    if (ward === 'OPD' && !vis.today) t = dayStart(t) + rng.int(7 * 60, 11 * 60) * MIN;
+    const t = vis.t;
     const visit = { encounterId: `ENC-${pad(++seq.enc)}`, fasting: ward === 'OPD' ? (rng.chance(0.6) ? 'YES' : rng.chance(0.5) ? 'NO' : 'UNKNOWN') : 'UNKNOWN', ivInfusion: ward === 'IPD' ? (rng.chance(0.6) ? 'YES' : 'UNKNOWN') : ward === 'ER' ? 'UNKNOWN' : 'NO' };
     const trueV = trueValues(s, t, visit);
     const panels = [];
@@ -456,6 +499,7 @@ function scenarioReports() {
       truth: { sampleError: null, dataIssue: null, criticalValue: false, pathologyFlag: null, requiresReview: false, details: null, ...(opts.truth ?? {}) },
       reviewer: null
     };
+    r.truth.errors = r.truth.sampleError ? [r.truth.sampleError] : [];
     r.truth.requiresReview = !!(r.truth.sampleError || r.truth.dataIssue || r.truth.criticalValue || r.truth.pathologyFlag || opts.truth?.requiresReview);
     if (opts.scenario) r.scenario = opts.scenario;
     out.push(r);
@@ -487,7 +531,7 @@ function scenarioReports() {
   s = S(5, 'M', 39);
   mk(s, 'CBC', '2026-11-06T09:00:00+07:00', { MCV: 92.4, RDW: 12.6, MCH: 31.0, HGB: 151, RBC: 4.87, HCT: 0.45, MCHC: 336 });
   mk(s, 'CBC', T('08:40'), { MCV: 77.8, RDW: 16.1, MCH: 24.9, HGB: 117, RBC: 4.70, HCT: 0.366, MCHC: 320, PLT: 331 }, { truth: { sampleError: 'wbit', details: 'Kịch bản WBIT dựng sẵn' },
-    scenario: sc('KB3b', 'Nghi nhầm mẫu (WBIT) trên CBC', 'MANUAL_REVIEW', 'MCV 92,4 → 77,8 fL, RDW 12,6 → 16,1% sau 10 ngày, không ghi nhận truyền máu. MCV/RDW/MCH là các chỉ số ổn định trong cá thể → delta check và mô hình cùng giữ lại.') });
+    scenario: sc('KB3b', 'Nghi nhầm mẫu (WBIT) trên CBC', 'MANUAL_REVIEW', 'MCV 92,4 → 77,8 fL, RDW 12,6 → 16,1% sau 10 ngày, không ghi nhận truyền máu. MCV/RDW/MCH là các chỉ số ổn định trong cá thể → delta check (HEME-H01) và mô hình nhầm mẫu (HEME-M01) cùng giữ lại. Hệ thống chỉ nêu nghi ngờ; người phụ trách xác minh định danh / lấy mẫu lại.') });
   // 6. QC lock
   s = S(6, 'M', 44);
   mk(s, 'CHEM_BASIC', T('10:05'), { K: 4.6 }, { measuredAtIso: T('10:45'), truth: { sampleError: 'qc_window', details: 'Đo K trong khoảng QC không đạt' },
@@ -517,7 +561,7 @@ function scenarioReports() {
   s = S(12, 'F', 49);
   mk(s, 'CHEM_EXT', '2026-10-20T08:00:00+07:00', { K: 4.1, CA: 2.34, MG: 0.84, ALP: 82 });
   mk(s, 'CHEM_EXT', T('09:20'), { K: 6.0, CA: 1.86, MG: 0.66, ALP: 49 }, { truth: { sampleError: 'edta', details: 'Kịch bản nhiễm EDTA dựng sẵn' },
-    scenario: sc('KB7', 'Kiểu hình nghi nhiễm EDTA → dùng để thử phản hồi', 'MANUAL_REVIEW', 'K↑ Ca↓ Mg↓ ALP↓ so với lần trước. Rule nhất quán K–Ca và mô hình cùng giữ. Thử: chọn "Yêu cầu kiểm tra bổ sung" → "Lấy mẫu lại", ghi lý do; phản hồi được lưu, rule đang chạy KHÔNG đổi.') });
+    scenario: sc('KB7', 'Kiểu hình nghi nhiễm EDTA → dùng để thử phản hồi', 'MANUAL_REVIEW', 'K↑ Ca↓ Mg↓ ALP↓ so với lần trước. Rule nhất quán K–Ca (CHEM-X01) giữ; nhiễm EDTA do rule đảm nhận, không dùng mô hình. Thử: chọn "Yêu cầu kiểm tra bổ sung" → "Lấy mẫu lại", ghi lý do; phản hồi được lưu, rule đang chạy KHÔNG đổi.') });
   // 13. Hemolysis
   s = S(13, 'M', 29);
   mk(s, 'CHEM_EXT', T('08:45'), { K: 5.4, AST: 51, ALT: 25 }, { hil: { H: 180, L: 12, I: 2 }, truth: { sampleError: 'hemolysis', details: 'H=180' },
@@ -550,6 +594,7 @@ function scenarioReports() {
 buildQc();
 const { subjects, reports, nW } = simulate();
 const scen = scenarioReports();
+if (new Set(subjects.map(x => x.token)).size !== subjects.length) throw new Error('Duplicate subject tokens');
 const all = [...reports, ...scen].map(r => { delete r._t; return r; });
 all.sort((a, b) => a.specimen.collectedAt.localeCompare(b.specimen.collectedAt));
 
@@ -558,7 +603,7 @@ const meta = {
   disclaimer: 'DỮ LIỆU GIẢ LẬP HOÀN TOÀN. Không chứa thông tin người bệnh thật. Tỷ lệ lỗi được làm giàu so với thực tế để huấn luyện; tham số minh họa.',
   rates: RATES, catalogVersion: catalog.version
 };
-const outDir = root + 'data/synthetic/';
+const outDir = root + OUT_DIR;
 mkdirSync(outDir, { recursive: true });
 writeFileSync(outDir + 'dataset.json', JSON.stringify({ meta, subjects: subjects.map(s => ({ token: s.token, sex: s.sex, age: s.age, split: s.split })), reports: all, qcLog }));
 
@@ -574,5 +619,5 @@ const bySplit = ['train', 'val', 'test', 'scenario'].map(sp => `${sp}=${count(r 
 const errTypes = {};
 for (const r of all) if (r.truth.sampleError) errTypes[r.truth.sampleError] = (errTypes[r.truth.sampleError] ?? 0) + 1;
 console.log(`Subjects: ${N_SUBJECTS} | Reports: ${all.length} (${bySplit}) | Results: ${lines.length - 1} | QC records: ${qcLog.length}`);
-console.log(`WBIT injected: ${nW} | sample errors:`, errTypes);
+console.log(`WBIT injected: ${nW} | sample errors (primary label):`, errTypes);
 console.log(`Today (${TODAY}) reports: ${count(r => r.specimen.collectedAt.startsWith(TODAY))}`);

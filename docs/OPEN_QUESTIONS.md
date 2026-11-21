@@ -12,7 +12,7 @@ Ghi chú: phần **yêu cầu của chủ dự án** lấy từ `PROJECT CONTEXT
 6. **QC.** Hệ thống có ghi thời điểm khóa và mở theo từng máy và từng xét nghiệm không, hay chỉ ghi theo ngày?
 7. **Bối cảnh người bệnh.** Những trường nào được phép đưa vào thành phần AI: tuổi, giới, bệnh nền, thuốc, nhịn ăn, truyền dịch, truyền máu? Lấy từ đâu, và thời điểm "biết" được ghi thế nào?
 8. **Nhật ký chạy lại và từ chối mẫu.** Nhật ký có ghi lý do không? Đây là nguồn nhãn quan trọng, nhưng nhãn này phản ánh *hành động*, không phải *lỗi thật*.
-9. **Định danh tại giường.** Khoa có quét mã định danh khi lấy mẫu không? Câu trả lời ảnh hưởng tới tỷ lệ WBIT thật và PPV của mô hình.
+9. **Định danh tại giường.** Khoa có quét mã định danh khi lấy mẫu không? Câu trả lời ảnh hưởng tới tỷ lệ WBIT thật và PPV của mô hình. (Xem thêm câu hỏi 3 ở mục "Câu hỏi mới về lớp mô hình".)
 10. **Trách nhiệm pháp lý.** Ai chịu trách nhiệm với một kết quả do hệ thống tự ký? Cơ chế ký số thực hiện thế nào?
 
 ## Trước khi bật tự ký thật (đề xuất)
@@ -26,9 +26,23 @@ Ghi chú: phần **yêu cầu của chủ dự án** lấy từ `PROJECT CONTEXT
 
 - Không có xác thực người dùng. Vai trò "Người phụ trách (demo)" là cố định.
 - Trạng thái lưu trong một file JSON cục bộ, không có cơ chế đồng thời nhiều người dùng.
-- Có ba detector XGBoost thử nghiệm: CBC WBIT (Graham et al., 2025), hóa sinh WBIT (Tortosa-Carreres et al., 2026), và nhiễm EDTA/dịch truyền trong hóa sinh (Farrell et al., 2026; Spies et al., 2025). Logistic regression cũ vẫn được giữ làm baseline. Tất cả được huấn luyện và đánh giá trên dữ liệu tổng hợp; đây chưa phải tái tạo paper hay thẩm định ngoài.
-- Ngưỡng XGBoost chọn theo recall mục tiêu trên validation; điểm đầu ra chưa được hiệu chỉnh xác suất. Ba paper mapping và phạm vi được ghi trong README và report. Detector nhiễm hóa sinh gộp các kiểu nhiễm trong dữ liệu mô phỏng; Farrell và Spies nghiên cứu bài toán/kiểu nhiễm liên quan nhưng không cùng một mô hình gộp này.
-- Tab Đánh giá mô hình đọc `reports/evaluation-comparison.json`, so sánh cùng tập test giữa chỉ rule, rule + logistic và rule + XGBoost. `reports/xgb_comparison.json` báo cáo theo detector. Chưa có giải thích feature đóng góp theo từng phiếu cho XGBoost.
-- Chưa có test hồi quy riêng cho scorer XGBoost JSON-tree hoặc đối chiếu số điểm với thư viện XGBoost.
-- Khi thiếu bất kỳ file XGBoost nào, server sẽ gọi trainer Python lúc khởi động; máy mới cần tạo `.venv` và cài `requirements-ml.txt` trước.
+- Mô hình đang chạy (`models/*.json`, huấn luyện ngoại tuyến bằng Python, suy luận bằng JS không dependency): **nhầm mẫu (WBIT)** hóa sinh và CBC, **lẫn dịch truyền** — XGBoost cấu hình của đồng đội (PR #2), giữ vì không phương án nào vượt rõ trên validation; **bất thường ở người khám lần đầu** (KNN theo panel, `fv_*`). LR, XGBoost (CV), LightGBM (CV) và cấu hình PR #2 được so trong `ml/benchmark.py`. Mỗi điểm có giải thích theo từng phiếu (Saabas cho cây, khớp `approx_contribs` của XGBoost; phân rã theo láng giềng cho KNN) và mức phủ dữ liệu. Điểm JS được test khớp với thư viện (`tests/model.test.js`).
+- Điểm mô hình chưa hiệu chỉnh xác suất, chưa có conformal prediction. Ngưỡng chọn theo recall định trước (cây) hoặc tỷ lệ gắn cờ 5% (KNN) trên tập validation giả lập.
+- Server không gọi Python khi khởi động: thiếu `models/*.json` thì chạy chỉ rule và ghi rõ trên giao diện.
 - Chưa có PBRTQC (theo dõi trôi máy bằng dòng kết quả bệnh nhân), chưa có vi sinh, nước tiểu hay kết quả định tính.
+
+## Câu hỏi mới về lớp mô hình (17/11/2026)
+
+1. **Người khám lần đầu có kết quả ngoài khoảng tham chiếu: chính sách nào?** Khoa chưa chốt. Prototype có tùy chọn `firstVisitAbnormalPolicy`:
+   - `ALWAYS_REVIEW` (**mặc định**, an toàn hơn): giữ rule CHEM-H02 (K/Na/Ca bất thường mà không có lịch sử → chuyển người duyệt). Mô hình bất thường chỉ thêm cờ.
+   - `MODEL_FLAG_ONLY` (đề xuất mặc định, **chờ khoa và người dùng xác nhận**: chỉ dùng trong benchmark, chưa đưa lên giao diện): tắt CHEM-H02; chỉ chuyển người duyệt khi mô hình phát hiện bất thường (KNN/one-class SVM/Gaussian, ngưỡng gắn cờ 5%) gắn cờ. Nếu mô hình không đánh giá được thì quay về `ALWAYS_REVIEW`.
+   - Lưu ý: `MODEL_FLAG_ONLY` cho phép mô hình **bỏ** một lượt giữ của rule, ngược với nguyên tắc "mô hình chỉ được nâng lên MANUAL_REVIEW". Nếu khoa chọn cách này, nguyên tắc đó cần được sửa một cách tường minh. Số phiếu được thả thêm và số lỗi trong đó: xem `reports/benchmark.json` → `firstVisitPolicy`.
+   - Hiện chỉ hóa sinh (CHEM-H02, K/Na/Ca) có rule "cần lịch sử khi bất thường"; CBC chưa có rule tương đương.
+2. **Thời điểm "có sẵn" của kết quả cũ.** Lịch sử đang được lọc theo thời điểm đo. Trong LIS thật cần lọc theo thời điểm kết quả được xác nhận/phát hành, theo đúng phiên bản (kết quả đo trước nhưng được sửa sau không được dùng như bản cuối). Dữ liệu giả lập chưa có trường này.
+3. **Nhầm mẫu (WBIT) — đã đưa lại vào phạm vi (17/11/2026).** Mô hình WBIT hóa sinh và CBC (XGBoost cấu hình PR #2) chỉ chạy khi có lịch sử ≤90 ngày và chỉ được giữ thêm phiếu. **Câu hỏi cho khoa: khoa có quét định danh người bệnh (mã vạch/vòng tay) tại giường khi lấy máu không?** Nếu có, tỷ lệ WBIT thật rất thấp và PPV của mô hình WBIT sẽ rất thấp (trên dữ liệu giả lập, PPV ước tính ở tỷ lệ lỗi 0,03% chỉ khoảng 0,4–0,8%) → phần lớn cờ WBIT là báo động giả. Nếu không, mô hình có ích hơn. Mô hình không phát hiện được WBIT ở người không có lịch sử ≤90 ngày.
+4. **Lỗi phân tích không có cờ máy** (bọt khí, kim hút tắc một phần…): khoa có ghi nhận các ca này không (nhật ký chạy lại có lý do)? Đây là nguồn nhãn để kiểm chứng mô hình lỗi phân tích (hiện không triển khai vì quá nhiều báo động giả trên dữ liệu giả lập).
+5. **WBIT hóa sinh: LightGBM có báo động giả thấp hơn rõ trên validation** (0,2% so với 1,0% của cấu hình PR #2, CI không chồng), nhưng PR-AUC và số lỗi bắt thêm ngang nhau nên theo quy tắc chốt trước vẫn giữ cấu hình PR #2. Người dùng/đồng đội có muốn tính báo động giả vào tiêu chí "tốt hơn rõ" không?
+6. **Trích dẫn cần đồng đội xác minh** (phần thêm trong PR #2, đã gỡ khỏi tài liệu cho tới khi đối chiếu):
+   - "Farrell et al. 2026, Ann Clin Biochem" (doi:10.1177/00045632261488751) — **không có trong tổng quan nghiên cứu**.
+   - Năm của Tortosa-Carreres: tổng quan ghi cả "CCLM 2026;64(3) (trực tuyến 29/10/2025)" (tiêu đề mục) lẫn "2025" (bảng, danh mục). Cần thống nhất.
+   - Các DOI (Graham 2025: 10.1093/clinchem/hvae210; Tortosa-Carreres: 10.1515/cclm-2025-0564; Spies 2025: 10.1093/clinchem/hvae168) không có trong tổng quan nên chưa đối chiếu được.

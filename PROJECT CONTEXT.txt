@@ -6,7 +6,7 @@ Xây dựng bản demo hệ thống tự động kiểm tra tính hợp lý và 
 
 Mục tiêu dài hạn là tự động học được từ những kết quả đã dự đoán sai hoặc độ chính xác thấp, sau khi bác sĩ đã trực tiếp xác nhận kết quả (gửi ký/không ký) và cho feedback thì tự học từ những kết quả đó để hoàn thiện hơn trong tương lai. Mục tiêu trước mắt là demo có thể dùng thử, thể hiện rõ hệ thống ra quyết định thế nào và bác sĩ can thiệp ở đâu.
 1. Bối cảnh được cung cấp
-    - Địa điểm: khoa xét nghiệm tại bệnh viện Vinmec.
+    - Địa điểm: khoa xét nghiệm của một bệnh viện tham gia chương trình.
     - Có các nhóm xét nghiệm như hóa sinh, huyết học, vi sinh....
     - Phòng xét nghiệm có các máy móc như cobas e402, cobas c303, cobas ise, dxh 690t, ortho vision, cobas pure,...(Một số máy khác tôi không nhớ cụ thể), nói chung sẽ có các máy xét nghiệm huyết học, vi sinh, hóa sinh, xét nghiệm nước tiểu.
     - Khoa thực hiện QC hằng ngày vào sáng sớm và chỉ chạy mẫu người bệnh khi QC đạt.
@@ -157,4 +157,4 @@ https://www.niddk.nih.gov/health-information/diabetes/overview/managing-diabetes
 [2] CLSI — AUTO15, Autoverification of Medical Laboratory Results for Specific Disciplines. Trang giới thiệu hướng dẫn thiết kế và thẩm định hệ thống theo chuyên ngành; cần tiếp cận nội dung và đối chiếu SOP trước khi xây dựng rule thực tế.
 https://clsi.org/shop/standards/auto15/
 
-[3] Tổng quan nghiên cứu: D:\Vin\VM-AutoValidation\Tong_quan_nghien_cuu_AI_tu_dong_duyet_ket_qua_xet_nghiem.md 
+[3] Tổng quan nghiên cứu: tài liệu `Tong_quan_nghien_cuu_AI_tu_dong_duyet_ket_qua_xet_nghiem.md` trong thư mục dự án.

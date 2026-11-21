@@ -22,7 +22,7 @@ Chưa có nghiên cứu nào công bố một hệ thống ML tự ký cho toàn
 
 ## Cập nhật áp dụng vào prototype
 
-Prototype hiện giữ logistic regression làm baseline và thử XGBoost cho ba detector. Ánh xạ nghiên cứu: **CBC WBIT** tham khảo Graham et al. (2025; [DOI](https://doi.org/10.1093/clinchem/hvae210)); **hóa sinh WBIT** tham khảo feature delta và pipeline Elastic Net + XGBoost của Tortosa-Carreres et al. (2026; [DOI](https://doi.org/10.1515/cclm-2025-0564)); **nhiễm EDTA/dịch truyền hóa sinh** tham khảo lần lượt Farrell et al. (2026; [DOI](https://doi.org/10.1177/00045632261488751)) và Spies et al. (2025; [DOI](https://doi.org/10.1093/clinchem/hvae168)). Đây là **chuyển phương pháp để thử tính áp dụng**, không tái tạo mô hình hay dữ liệu nghiên cứu: feature/nhãn và train/validation/test đều thuộc dữ liệu giả lập trong repo; detector nhiễm gộp nhiều kiểu nhiễm thành một bài toán prototype. So sánh tổng thể nằm tại `reports/evaluation-comparison.json`, còn kết quả detector tại `reports/xgb_comparison.json`. Không dùng các kết quả này để khẳng định hiệu quả lâm sàng.
+Prototype thử các phương pháp trong tổng quan trên dữ liệu giả lập: XGBoost cho nhầm mẫu (WBIT) hóa sinh và CBC khi có lịch sử ≤90 ngày (theo hướng Graham 2025 và Tortosa-Carreres; cấu hình do đồng đội chọn trong PR #2), XGBoost có giám sát trên nhiễm dịch truyền mô phỏng (theo hướng Spies 2025, Clinical Chemistry), và phát hiện bất thường đa biến cho người khám lần đầu (KNN, theo Farrell 2024, CCLM). Nhiễm EDTA vẫn bắt bằng luật K–Ca. So sánh logistic regression, XGBoost và LightGBM nằm ở `reports/benchmark.json`; đánh giá toàn luồng ở `reports/evaluation-comparison.json`. Đây là chuyển phương pháp để thử tính áp dụng, không tái tạo mô hình hay dữ liệu nghiên cứu, và không dùng để khẳng định hiệu quả lâm sàng.
 
 ## Phạm vi và mức độ đọc
 
@@ -317,7 +317,7 @@ Ba hướng dưới đây tôi không tìm thấy trong tài liệu về autover
 
 ---
 
-## Đề xuất cho dự án tại Vinmec Ocean Park 2
+## Đề xuất cho dự án tự động kiểm tra kết quả xét nghiệm
 
 **Đề xuất chính:** xây Lớp A bằng luật trước và cho chạy ngầm ngay, rồi xây Lớp C thành các bộ phát hiện từng loại lỗi, thay vì một bộ phân loại "đúng hay sai" duy nhất. Lý do: mọi hệ thống tự ký đã chạy thật đều là luật, còn ML chỉ có bằng chứng tốt khi nhắm vào một loại lỗi cụ thể có thể mô phỏng.
 
@@ -332,7 +332,7 @@ Ba hướng dưới đây tôi không tìm thấy trong tài liệu về autover
 
 - Lấy khung Zhongshan làm điểm xuất phát vì cùng dòng máy Cobas. Khung có bốn bước: đủ kết quả, luật của máy (cờ, dải đo), luật của phòng xét nghiệm (HIL, giá trị nguy hiểm, logic, nhất quán), so với lịch sử (delta check).
 - Thêm các luật nhất quán giữa chỉ số ngay từ Lớp A. Chúng rẻ, giải thích được và bắt đúng các lỗi bạn liệt kê: Ca × P cho nhiễm EDTA, Na/Cl cho điện cực lão hóa, TG so với chỉ số đục.
-- Tính ngưỡng từ dữ liệu của chính Vinmec. Một bệnh viện trong nghiên cứu Zhongshan phải đặt lại ngưỡng delta mới dùng được.
+- Tính ngưỡng từ dữ liệu của chính phòng xét nghiệm triển khai. Một bệnh viện trong nghiên cứu Zhongshan phải đặt lại ngưỡng delta mới dùng được.
 - Không sao chép cách chọn phân vị. Nới theo phân vị cố định làm tỷ lệ bỏ lọt tăng hơn gấp đôi ở Zhongshan. Nên đặt ngưỡng cho từng chỉ số sao cho đạt tỷ lệ bỏ lọt mục tiêu trước.
 - Đông máu trên Stago: dùng luật theo Wang Z. 2019. Chưa có nghiên cứu ML nào để dựa vào.
 

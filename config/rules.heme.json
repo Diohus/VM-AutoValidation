@@ -1,6 +1,6 @@
 {
   "rulesetId": "HEME-AV",
-  "version": "heme-demo-1.0.0",
+  "version": "heme-demo-1.4.0",
   "discipline": "HEME",
   "status": "MINH HỌA — CHƯA ĐƯỢC KHOA PHÊ DUYỆT",
   "approvedBy": null,
@@ -183,11 +183,26 @@
       "stage": "MODEL",
       "priority": 80,
       "onFail": "REVIEW",
-      "onNotEvaluable": "IGNORE",
+      "onNotEvaluable": "REVIEW",
       "name": "Mô hình phát hiện nhầm mẫu (WBIT) — chỉ được giữ thêm",
-      "reason": "MCV/RDW/MCH… lệch khỏi lịch sử vượt biến thiên trong cá thể. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "reason": "MCV/RDW/MCH… lệch khỏi lịch sử vượt biến thiên trong cá thể (XGBoost, cấu hình PR #2). Chỉ chạy khi có lịch sử ≤90 ngày; không có lịch sử → không áp dụng (không thay cho rule). Chỉ có quyền chuyển MANUAL_REVIEW.",
       "params": {
-        "model": "heme_wbit_xgb"
+        "model": "heme_wbit"
+      }
+    },
+    {
+      "code": "HEME-M03",
+      "type": "model_score",
+      "stage": "MODEL",
+      "priority": 82,
+      "onFail": "REVIEW",
+      "onNotEvaluable": "REVIEW",
+      "name": "Phát hiện bất thường đa chỉ số — người khám lần đầu (KNN) — chỉ được giữ thêm",
+      "reason": "Chỉ chạy khi không có lịch sử ≤90 ngày. Khoảng cách tới các CBC thường quy gần nhất (theo Farrell 2024), ngưỡng gắn cờ 5%. Nhắm tới lỗi phân tích; bệnh thật cũng có thể bị gắn cờ. Chỉ có quyền chuyển MANUAL_REVIEW.",
+      "params": {
+        "modelByPanel": {
+          "CBC": "fv_cbc"
+        }
       }
     }
   ]
