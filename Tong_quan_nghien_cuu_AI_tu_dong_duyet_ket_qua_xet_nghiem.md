@@ -317,7 +317,7 @@ Ba hướng dưới đây tôi không tìm thấy trong tài liệu về autover
 
 ---
 
-## Đề xuất cho dự án tại Vinmec Ocean Park 2
+## Đề xuất cho dự án tự động kiểm tra kết quả xét nghiệm
 
 **Đề xuất chính:** xây Lớp A bằng luật trước và cho chạy ngầm ngay, rồi xây Lớp C thành các bộ phát hiện từng loại lỗi, thay vì một bộ phân loại "đúng hay sai" duy nhất. Lý do: mọi hệ thống tự ký đã chạy thật đều là luật, còn ML chỉ có bằng chứng tốt khi nhắm vào một loại lỗi cụ thể có thể mô phỏng.
 
@@ -332,7 +332,7 @@ Ba hướng dưới đây tôi không tìm thấy trong tài liệu về autover
 
 - Lấy khung Zhongshan làm điểm xuất phát vì cùng dòng máy Cobas. Khung có bốn bước: đủ kết quả, luật của máy (cờ, dải đo), luật của phòng xét nghiệm (HIL, giá trị nguy hiểm, logic, nhất quán), so với lịch sử (delta check).
 - Thêm các luật nhất quán giữa chỉ số ngay từ Lớp A. Chúng rẻ, giải thích được và bắt đúng các lỗi bạn liệt kê: Ca × P cho nhiễm EDTA, Na/Cl cho điện cực lão hóa, TG so với chỉ số đục.
-- Tính ngưỡng từ dữ liệu của chính Vinmec. Một bệnh viện trong nghiên cứu Zhongshan phải đặt lại ngưỡng delta mới dùng được.
+- Tính ngưỡng từ dữ liệu của chính phòng xét nghiệm triển khai. Một bệnh viện trong nghiên cứu Zhongshan phải đặt lại ngưỡng delta mới dùng được.
 - Không sao chép cách chọn phân vị. Nới theo phân vị cố định làm tỷ lệ bỏ lọt tăng hơn gấp đôi ở Zhongshan. Nên đặt ngưỡng cho từng chỉ số sao cho đạt tỷ lệ bỏ lọt mục tiêu trước.
 - Đông máu trên Stago: dùng luật theo Wang Z. 2019. Chưa có nghiên cứu ML nào để dựa vào.
 

@@ -6,7 +6,7 @@ Xây dựng bản demo hệ thống tự động kiểm tra tính hợp lý và 
 
 Mục tiêu dài hạn là tự động học được từ những kết quả đã dự đoán sai hoặc độ chính xác thấp, sau khi bác sĩ đã trực tiếp xác nhận kết quả (gửi ký/không ký) và cho feedback thì tự học từ những kết quả đó để hoàn thiện hơn trong tương lai. Mục tiêu trước mắt là demo có thể dùng thử, thể hiện rõ hệ thống ra quyết định thế nào và bác sĩ can thiệp ở đâu.
 1. Bối cảnh được cung cấp
-    - Địa điểm: khoa xét nghiệm tại bệnh viện Vinmec.
+    - Địa điểm: khoa xét nghiệm của một bệnh viện tham gia chương trình.
     - Có các nhóm xét nghiệm như hóa sinh, huyết học, vi sinh....
     - Phòng xét nghiệm có các máy móc như cobas e402, cobas c303, cobas ise, dxh 690t, ortho vision, cobas pure,...(Một số máy khác tôi không nhớ cụ thể), nói chung sẽ có các máy xét nghiệm huyết học, vi sinh, hóa sinh, xét nghiệm nước tiểu.
     - Khoa thực hiện QC hằng ngày vào sáng sớm và chỉ chạy mẫu người bệnh khi QC đạt.

@@ -70,7 +70,7 @@ Mô hình chạy trong app (`models/*.json`) được huấn luyện **ngoại t
 
 ## Giới hạn
 
-- Tham số không lấy từ dữ liệu Vinmec. Phân bố, tỷ lệ bệnh và tỷ lệ lỗi đều là giả định.
+- Tham số không lấy từ dữ liệu bệnh viện hoặc người bệnh. Phân bố, tỷ lệ bệnh và tỷ lệ lỗi đều là giả định.
 - Lỗi được mô phỏng theo cơ chế đã biết, nên dễ phát hiện hơn lỗi thật. Kinh nghiệm trong tổng quan cho thấy AUC trên dữ liệu mô phỏng không dự báo được hiệu năng thật.
 - Bộ benchmark mô hình dùng bộ dữ liệu riêng lớn hơn: `npm run bench:data` (10.000 người bệnh, seed 20261117, không có lượt "hôm nay").
 - Không mô phỏng trôi máy dần dần (PBRTQC), đổi lô hóa chất, hay kết quả định tính và vi sinh.
